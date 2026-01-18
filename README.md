@@ -1,4 +1,4 @@
-# 📈 Quant Trading Platform
+# 📈 Quant Trading
 
 ![Project Status](https://img.shields.io/badge/Status-In%20Development-green)
 
@@ -15,14 +15,6 @@
 ![System Architecture](./docs/images/arch.svg)
 _(다이어그램 설명: Next.js 프론트엔드, Go API 게이트웨이, Python 퀀트 엔진, 그리고 Redis와 TimescaleDB 간의 데이터 흐름)_
 
----
-
-## 🌊 System Flow
-
-![System Flow](./docs/images/flow.svg)
-
----
-
 ### Core Components
 
 | Service           | Tech Stack                     | Role                                                        |
@@ -35,6 +27,36 @@ _(다이어그램 설명: Next.js 프론트엔드, Go API 게이트웨이, Pytho
 
 ---
 
+## 🌊 System Flow
+
+![System Flow](./docs/images/flow.svg)
+
+본 시스템은 **고성능 I/O 처리를 위한 Go**와 **데이터 분석 및 ML 추론을 위한 Python**을 결합한
+**하이브리드 이벤트 기반 아키텍처(Hybrid Event-Driven Architecture)**입니다.
+
+각 서비스는 **Redis**를 통해 느슨하게 결합(Loosely Coupled)되어 있으며, 데이터 수집부터 주문 실행까지 **Zero-Latency**를 지향합니다.
+
+### 🔄 주요 데이터 흐름 (Core Data Flow)
+
+**1. 초고속 데이터 수집 (Fast Path)**
+
+- **Go Server**는 증권사의 WebSocket에 연결하여 실시간 호가/체결 데이터를 수신합니다.
+- 수신된 데이터는 즉시 **Redis(In-Memory)**에 캐싱되어, 프론트엔드 요청 시 DB 조회 없이 0.001초 내에 응답합니다.
+- 동시에 Go는 데이터를 Redis Pub/Sub 채널(`market_data`)로 브로드캐스팅합니다.
+
+**2. 전략 분석 및 신호 생성 (Quant Engine)**
+
+- **Python Engine**은 `market_data` 채널을 구독(Subscribe)하고 있다가, 데이터 수신 즉시 전략 알고리즘(RSI, ML Model)을 수행합니다.
+- 매수/매도 타이밍이 포착되면, Python은 직접 주문을 넣지 않고 **Redis**의 `trade_signal` 채널로 주문 명령(JSON)을 발행(Publish)합니다.
+
+**3. 주문 실행 및 영속화 (Execution & Persistence)**
+
+- **Go Server**는 `trade_signal` 채널을 감시하다가, 신호가 들어오는 즉시 증권사 API를 호출하여 주문을 실행합니다.
+- Go의 높은 동시성(Goroutine) 처리 능력을 활용하여 다수의 주문을 병목 없이 처리합니다.
+- 최종적으로 체결된 내역은 **PostgreSQL**에 안전하게 저장(Archive)되어, 추후 백테스팅 및 수익률 분석에 활용됩니다.
+
+---
+
 ## 📂 Project Structure
 
 ```bash
@@ -43,7 +65,6 @@ _(다이어그램 설명: Next.js 프론트엔드, Go API 게이트웨이, Pytho
 │   ├── web/        # Frontend (Next.js + Tailwind + FSD)
 │   ├── server/     # Backend API (Go + Fiber)
 │   └── engine/     # Quant Worker (Python + Pandas)
-├── packages/       # Shared configs (UI Kit, TS Types)
 ├── infra/          # Infrastructure configurations (DB init scripts)
 ├── docker-compose.yml
 └── README.md
