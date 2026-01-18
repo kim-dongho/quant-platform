@@ -7,3 +7,10 @@ export interface MarketData {
   close: number;
   volume: number;
 }
+
+export interface ChartOptions {
+  volume: boolean;
+  rsi: boolean;
+  macd: boolean;
+  bollinger: boolean;
+}

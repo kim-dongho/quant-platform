@@ -97,3 +97,55 @@ export function calculateRSI(data: MarketData[], count = 14) {
   }
   return result;
 }
+
+/**
+ * 지수 이동평균(EMA) 헬퍼 함수
+ */
+function calculateEMA(data: { time: string; value: number }[], count: number) {
+  const k = 2 / (count + 1);
+  const result = [];
+  let ema = data[0].value;
+
+  for (let i = 0; i < data.length; i++) {
+    ema = data[i].value * k + ema * (1 - k);
+    result.push({ time: data[i].time, value: ema });
+  }
+  return result;
+}
+
+/**
+ * MACD 계산 함수 (12, 26, 9)
+ * @returns { histogram, macd, signal }
+ */
+export function calculateMACD(data: MarketData[]) {
+  const closeData = data.map(d => ({ time: d.time.split('T')[0], value: d.close }));
+  
+  const ema12 = calculateEMA(closeData, 12);
+  const ema26 = calculateEMA(closeData, 26);
+
+  const macdLine = [];
+  const histogram = [];
+  const macdDataForSignal = [];
+
+  // MACD Line = EMA(12) - EMA(26)
+  for (let i = 0; i < closeData.length; i++) {
+    const val12 = ema12[i]?.value || 0;
+    const val26 = ema26[i]?.value || 0;
+    const macd = val12 - val26;
+    
+    macdLine.push({ time: closeData[i].time, value: macd });
+    macdDataForSignal.push({ time: closeData[i].time, value: macd });
+  }
+
+  // Signal Line = MACD Line의 EMA(9)
+  const signalLine = calculateEMA(macdDataForSignal, 9);
+
+  // Histogram = MACD Line - Signal Line
+  for (let i = 0; i < macdLine.length; i++) {
+    const macd = macdLine[i].value;
+    const signal = signalLine[i]?.value || 0;
+    histogram.push({ time: macdLine[i].time, value: macd - signal });
+  }
+
+  return { macd: macdLine, signal: signalLine, histogram };
+}
