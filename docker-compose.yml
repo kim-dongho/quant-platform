@@ -50,14 +50,14 @@ services:
       - db
       - redis
 
-  # 5. 프론트엔드 (Next.js)
-  web:
-    build:
-      context: ./apps/web
-      dockerfile: Dockerfile
-    container_name: quant-web
-    ports:
-      - "3000:3000"
-    environment:
-      # 브라우저(클라이언트)는 로컬호스트로 접속
-      NEXT_PUBLIC_API_URL: "http://localhost:8080"
+  # # 5. 프론트엔드 (Next.js)
+  # web:
+  #   build:
+  #     context: ./apps/web
+  #     dockerfile: Dockerfile
+  #   container_name: quant-web
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     # 브라우저(클라이언트)는 로컬호스트로 접속
+  #     NEXT_PUBLIC_API_URL: "http://localhost:8080"
