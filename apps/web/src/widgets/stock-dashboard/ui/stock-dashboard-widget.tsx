@@ -5,7 +5,7 @@ import { MarketData } from '@/entities/stock/model/types';
 import { getStockHistory } from '@/entities/stock/api/stocks';
 import { StockChart } from '@/entities/stock/ui/stock-chart';
 import { SeriesMarker } from 'lightweight-charts';
-import { getGoldenCrossSignals } from '@/entities/stock/lib/strategy';
+import { getAdvancedSignals } from '@/entities/stock/lib/strategy';
 
 export const StockDashboardWidget = () => {
   const [data, setData] = useState<MarketData[]>([]);
@@ -20,7 +20,7 @@ const fetchData = useCallback(async () => {
       setData(history);
 
       // 2. 전략 실행 (백테스팅 결과 생성) 🤖
-      const algoMarkers = getGoldenCrossSignals(history);
+      const algoMarkers = getAdvancedSignals(history);
       
       setMarkers(algoMarkers);
 

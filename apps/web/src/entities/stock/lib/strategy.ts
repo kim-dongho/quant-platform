@@ -1,57 +1,46 @@
+// src/entities/stock/lib/strategy.ts
 import { MarketData } from '../model/types';
-import { calculateSMA } from './indicators'; // 아까 만든 SMA 함수 재사용
+import { calculateSMA, calculateRSI } from './indicators'; // RSI 추가 import
 import { SeriesMarker } from 'lightweight-charts';
 
-/**
- * 골든크로스 전략 (5일선 > 20일선 돌파 시 매수 신호)
- */
-export function getGoldenCrossSignals(data: MarketData[]): SeriesMarker<string>[] {
+export function getAdvancedSignals(data: MarketData[]): SeriesMarker<string>[] {
   const sma5 = calculateSMA(data, 5);
   const sma20 = calculateSMA(data, 20);
-  
-  const markers: SeriesMarker<string>[] = [];
+  const rsi = calculateRSI(data, 14); // RSI 14일
 
-  // 데이터 매칭을 위해 Map으로 변환 (날짜 -> 값)
+  const markers: SeriesMarker<string>[] = [];
+  
+  // 데이터 매핑
   const sma5Map = new Map(sma5.map(i => [i.time, i.value]));
   const sma20Map = new Map(sma20.map(i => [i.time, i.value]));
+  const rsiMap = new Map(rsi.map(i => [i.time, i.value]));
 
-  // SMA 20일 데이터가 있는 시점부터 루프 시작 (그 전엔 골든크로스 계산 불가)
   for (let i = 20; i < data.length; i++) {
     const today = data[i].time.split('T')[0];
     const yesterday = data[i-1].time.split('T')[0];
 
-    const todaySMA5 = sma5Map.get(today);
-    const todaySMA20 = sma20Map.get(today);
-    const prevSMA5 = sma5Map.get(yesterday);
-    const prevSMA20 = sma20Map.get(yesterday);
+    const s5 = sma5Map.get(today);
+    const s20 = sma20Map.get(today);
+    const prevS5 = sma5Map.get(yesterday);
+    const prevS20 = sma20Map.get(yesterday);
+    const currentRSI = rsiMap.get(today);
 
-    // 값이 다 존재할 때만 계산
-    if (todaySMA5 && todaySMA20 && prevSMA5 && prevSMA20) {
+    if (s5 && s20 && prevS5 && prevS20 && currentRSI) {
       
-      // ✅ 골든크로스 조건: 어제는 5일선이 20일선 아래였는데, 오늘은 위로 뚫음
-      if (prevSMA5 <= prevSMA20 && todaySMA5 > todaySMA20) {
+      // ✅ 매수 조건: 골든크로스 AND RSI가 70 미만 (아직 과열 아님)
+      if (prevS5 <= prevS20 && s5 > s20 && currentRSI < 70) {
         markers.push({
-          time: today,
-          position: 'belowBar', // 캔들 아래에 표시
-          color: '#FFD700',     // 황금색 (Golden Cross)
-          shape: 'arrowUp',
-          text: 'Golden Cross', // 마커 텍스트
-          size: 2,
+          time: today, position: 'belowBar', color: '#FFD700', shape: 'arrowUp', text: 'Strong Buy', size: 2
         });
       }
-      
-      // (선택) 데드크로스 조건: 5일선이 20일선 아래로 떨어짐 -> 매도 신호
-      if (prevSMA5 >= prevSMA20 && todaySMA5 < todaySMA20) {
+
+      // 🔻 매도 조건: 데드크로스 OR RSI가 70 이상 찍고 내려올 때 (차익 실현)
+      if (prevS5 >= prevS20 && s5 < s20) {
         markers.push({
-          time: today,
-          position: 'aboveBar',
-          color: '#A9A9A9',     // 회색
-          shape: 'arrowDown',
-          text: 'Dead Cross',
+          time: today, position: 'aboveBar', color: '#A9A9A9', shape: 'arrowDown', text: 'Sell',
         });
       }
     }
   }
-
   return markers;
 }
