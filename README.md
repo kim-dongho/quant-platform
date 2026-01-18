@@ -51,9 +51,9 @@ _(다이어그램 설명: Next.js 프론트엔드, Go API 게이트웨이, Pytho
 ### Prerequisites
 
 - **Docker & Docker Compose** (필수 - DB 및 Redis 실행용)
-- **Node.js** (v20+) & **pnpm** (패키지 매니저)
-- **Go** (v1.21+)
-- **Python** (v3.10+)
+- **Node.js** (v22.18.0+) & **pnpm**
+- **Go** (v1.25.6+)
+- **Python** (v3.9.6+)
 
 ### 1. Installation
 
