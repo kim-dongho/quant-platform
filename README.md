@@ -60,7 +60,7 @@ _(다이어그램 설명: Next.js 프론트엔드, Go API 게이트웨이, Pytho
 레포지토리를 클론하고 모노레포 의존성을 설치합니다.
 
 ```bash
-git clone [https://github.com/your-username/quant-platform.git](https://github.com/your-username/quant-platform.git)
+git clone https://github.com/kim-dongho/quant-platform.git
 cd quant-platform
 
 # 모노레포 의존성 전체 설치 (Turborepo)
