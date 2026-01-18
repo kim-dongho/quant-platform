@@ -1,0 +1,8 @@
+# Go 빌드 결과물 제외
+main
+main.exe
+tmp
+vendor
+
+# OS 파일 제외
+.DS_Store

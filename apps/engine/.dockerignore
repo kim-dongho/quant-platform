@@ -1,0 +1,8 @@
+# 가상환경 및 캐시 제외
+venv
+__pycache__
+.pytest_cache
+*.pyc
+
+# OS 파일 제외
+.DS_Store

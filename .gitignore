@@ -1,0 +1,18 @@
+# Node.js
+.node_modules
+.next
+.env
+.DS_Store
+
+# Go
+/apps/server/bin
+/apps/server/*.exe
+/apps/server/vendor
+
+# Python
+/apps/engine/venv
+/apps/engine/__pycache__
+*.pyc
+
+# DB Data
+/infra/postgres/data
