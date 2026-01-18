@@ -1,7 +1,6 @@
 # 📈 Quant Trading Platform
 
 ![Project Status](https://img.shields.io/badge/Status-In%20Development-green)
-![License](https://img.shields.io/badge/License-MIT-lightgrey)
 
 **Go + Python + Next.js** 을 활용한 퀀트 투자 플랫폼입니다.
 
@@ -15,6 +14,14 @@
 
 ![System Architecture](./docs/images/arch.svg)
 _(다이어그램 설명: Next.js 프론트엔드, Go API 게이트웨이, Python 퀀트 엔진, 그리고 Redis와 TimescaleDB 간의 데이터 흐름)_
+
+---
+
+## 🌊 System Flow
+
+![System Flow](./docs/images/flow.svg)
+
+---
 
 ### Core Components
 
