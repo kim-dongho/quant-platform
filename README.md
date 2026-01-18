@@ -11,7 +11,7 @@
 
 ## 🏗️ System Architecture
 
-이 프로젝트는 **Turborepo**를 활용한 Monorepo 구조이며, 각 서비스는 **Docker Compose**를 통해 유기적으로 연결됩니다.
+이 프로젝트는 효율적인 관리를 위해 **Monorepo** 구조를 채택했습니다. 프론트엔드 및 공통 패키지의 빌드 최적화에는 **Turborepo**를 사용하며, 전체 서비스(Go, Python, DB)의 오케스트레이션은 **Docker Compose**를 통해 수행합니다
 
 ![System Architecture](./docs/images/arch.svg)
 _(다이어그램 설명: Next.js 프론트엔드, Go API 게이트웨이, Python 퀀트 엔진, 그리고 Redis와 TimescaleDB 간의 데이터 흐름)_

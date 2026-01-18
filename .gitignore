@@ -16,3 +16,6 @@
 
 # DB Data
 /infra/postgres/data
+
+# Packages
+node_modules
