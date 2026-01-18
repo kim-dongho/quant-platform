@@ -19,3 +19,6 @@
 
 # Packages
 node_modules
+
+# TurboRepo Cache (필수)
+.turbo
