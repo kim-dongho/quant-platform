@@ -32,7 +32,7 @@ _(다이어그램 설명: Next.js 프론트엔드, Go API 게이트웨이, Pytho
 ![System Flow](./docs/images/flow.svg)
 
 본 시스템은 **고성능 I/O 처리를 위한 Go**와 **데이터 분석 및 ML 추론을 위한 Python**을 결합한
-**하이브리드 이벤트 기반 아키텍처(Hybrid Event-Driven Architecture)**입니다.
+**하이브리드 이벤트 기반 아키텍처(Hybrid Event-Driven Architecture)** 입니다.
 
 각 서비스는 **Redis**를 통해 느슨하게 결합(Loosely Coupled)되어 있으며, 데이터 수집부터 주문 실행까지 **Zero-Latency**를 지향합니다.
 
