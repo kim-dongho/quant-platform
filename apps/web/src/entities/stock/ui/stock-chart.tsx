@@ -25,7 +25,7 @@ interface Props {
 export const StockChart = ({ data, markers = [], visibleIndicators }: Props) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
-
+  
   useEffect(() => {
     if (!chartContainerRef.current) return;
 
