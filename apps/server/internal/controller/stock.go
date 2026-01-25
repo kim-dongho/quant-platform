@@ -38,7 +38,7 @@ func GetStockHistory(c *fiber.Ctx) error {
 	// 2. 시세 데이터 조회
 	var history []model.MarketData
 	result := db.Table("market_data").
-		Select("TO_CHAR(time, 'YYYY-MM-DD') as time, open, high, low, close, volume").
+		Select("DISTINCT ON (time) TO_CHAR(time, 'YYYY-MM-DD') as time, open, high, low, close, volume").
 		Where("symbol = ?", symbol).
 		Order("time ASC").
 		Find(&history)

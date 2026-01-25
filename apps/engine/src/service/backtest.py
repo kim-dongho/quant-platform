@@ -69,20 +69,25 @@ def calculate_strategy(ticker: str, params: dict):
     # 누적 수익률 계산
     df['cum_ret'] = (1 + df['strategy_return'].fillna(0)).cumprod()
 
-    # NaN 제거
-    df = df.dropna(subset=['cum_ret'])
+    df['time_str'] = df['time'].dt.strftime('%Y-%m-%d')
+    
+    # - 동일 날짜가 여러 번 나오는 경우 마지막 데이터만 유지 (중복 방지)
+    df_clean = df.drop_duplicates(subset=['time_str'], keep='last')
+    
+    # - NaN 데이터 제거 (지표 계산 초기에 발생하는 NaN 행 삭제)
+    df_clean = df_clean.dropna(subset=['cum_ret'])
 
     # 프론트엔드가 즉시 사용할 수 있는 [{time, value}, ...] 구조로 변환
     results = [
         {
-            "time": str(t).split(' ')[0], 
+            "time": t, 
             "value": round(float(v), 4)
         }
-        for t, v in zip(df['time'], df['cum_ret'])
+        for t, v in zip(df_clean['time_str'], df_clean['cum_ret'])
     ]
 
     return {
         "ticker": ticker,
         "results": results,
-        "final_return": round((df['cum_ret'].iloc[-1] - 1) * 100, 2)
+        "final_return": round((df_clean['cum_ret'].iloc[-1] - 1) * 100, 2)
     }
