@@ -1,0 +1,100 @@
+basePath: /api
+definitions:
+  quant-server_internal_model.BacktestRequest:
+    type: object
+  quant-server_internal_model.MarketData:
+    properties:
+      close:
+        example: 114.1
+        type: number
+      high:
+        example: 115.2
+        type: number
+      low:
+        example: 111.05
+        type: number
+      open:
+        example: 112.5
+        type: number
+      symbol:
+        example: NVDA
+        type: string
+      time:
+        example: "2025-01-25"
+        type: string
+      volume:
+        example: 1200000
+        type: number
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: Go + Python 퀀트 플랫폼 API 서버입니다.
+  title: Quant Trading API
+  version: "1.0"
+paths:
+  /backtest:
+    post:
+      consumes:
+      - application/json
+      description: 파라미터를 Python 엔진으로 전달하여 백테스트 결과(수익률 곡선 등)를 받아옵니다.
+      parameters:
+      - description: 백테스트 설정 (Ticker 및 전략 파라미터)
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/quant-server_internal_model.BacktestRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 수익률 데이터 및 날짜 배열
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Engine connection failed
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: 퀀트 백테스트 실행
+      tags:
+      - backtest
+  /stocks/{symbol}/history:
+    get:
+      consumes:
+      - application/json
+      description: 특정 심볼의 과거 시세 데이터를 조회합니다.
+      parameters:
+      - description: Stock Symbol (e.g., RKLB)
+        in: path
+        name: symbol
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/quant-server_internal_model.MarketData'
+            type: array
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: 주식 히스토리 조회
+      tags:
+      - stocks
+swagger: "2.0"

@@ -13,7 +13,7 @@ func SetupRoutes(app *fiber.App) {
 	backtest := api.Group("/backtest")
 	backtest.Post("/", controller.RunBacktest)
 
-	// 나중에 추가될 수 있는 경로 (예: 모의투자)
-	// mock := api.Group("/mock")
-	// mock.Post("/order", controllers.PlaceOrder)
+	// 주식 관련 경로
+	stocks := api.Group("/stocks")
+	stocks.Get("/:symbol/history", controller.GetStockHistory)
 }
