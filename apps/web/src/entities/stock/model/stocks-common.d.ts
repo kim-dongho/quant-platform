@@ -16,3 +16,7 @@ export interface ChartOptions {
   sma: boolean;
 }
 
+export interface BacktestResultPoint {
+  time: string;
+  value: number; // Equity
+}

@@ -73,7 +73,6 @@ export const StockDashboardWidget = () => {
            </div>
         )}
         
-        {/* 데이터가 로드된 후에만 차트 렌더링 */}
         {data.length > 0 ? (
           <StockChart 
             data={data} 
@@ -101,7 +100,7 @@ export const StockDashboardWidget = () => {
                 {backtestLine.length > 0 ? 
                   `+${((backtestLine[backtestLine.length-1].value - 1) * 100).toFixed(2)}%` : '--'}
             </div>
-            <p className="text-xs text-slate-500 mt-1">Based on last 1 year data</p>
+            <p className="text-xs text-slate-500 mt-1">Based on data</p>
         </div>
       </div>
     </div>

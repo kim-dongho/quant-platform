@@ -1,12 +1,17 @@
-export interface BacktestResponseDto {
+export interface getBacktestResultResponseDto {
   ticker: string;
-  results: BacktestResultPoint[]; // 👈 이 부분이 빠져있었을 겁니다.
-  final_return?: number;          // 최종 수익률 (선택사항)
-  total_trades?: number;          // 총 거래 횟수 (선택사항)
-  win_rate?: number;              // 승률 (선택사항)
+  results: BacktestResultPoint[];
+  final_return?: number;          // 최종 수익률
+  total_trades?: number;          // 총 거래 횟수
+  win_rate?: number;              // 승률
 }
 
-export interface BacktestResultPoint {
-  time: string;  // YYYY-MM-DD
-  value: number; // Equity (수익률 지수)
+export interface getStockHistoryResponseDto {
+  time: string;
+  symbol: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
 }

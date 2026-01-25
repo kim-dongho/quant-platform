@@ -1,4 +1,4 @@
-import { MarketData } from '../model/stocks-common';
+import { MarketData } from "../model/stocks-common";
 
 /**
  * 단순 이동평균(SMA) 계산 함수
@@ -7,12 +7,12 @@ import { MarketData } from '../model/stocks-common';
  * @returns { time, value } 형태의 배열
  */
 export function calculateSMA(data: MarketData[], count: number) {
-  const avg = (d: MarketData[]) => d.reduce((a, b) => a + b.close, 0) / d.length;
   const result = [];
   
   for (let i = count - 1; i < data.length; i++) {
-    const val = avg(data.slice(i - count + 1, i + 1));
-    result.push({ time: data[i].time.split('T')[0], value: val });
+    const slice = data.slice(i - count + 1, i + 1);
+    const sum = slice.reduce((a, b) => a + b.close, 0);
+    result.push({ time: data[i].time, value: sum / count });
   }
   
   return result;
@@ -42,14 +42,13 @@ export function calculateBollingerBands(data: MarketData[], count = 20, multipli
   for (let i = count - 1; i < data.length; i++) {
     const slice = data.slice(i - count + 1, i + 1);
     
-    // 중심선 (Mid Band) = 단순 이동평균
     const sma = slice.reduce((a, b) => a + b.close, 0) / count;
     const stdDev = calculateStdDev(slice, count);
 
     result.push({
-      time: data[i].time.split('T')[0],
-      upper: sma + stdDev * multiplier, // 상한선
-      lower: sma - stdDev * multiplier, // 하한선
+      time: data[i].time,
+      upper: sma + stdDev * multiplier,
+      lower: sma - stdDev * multiplier,
     });
   }
   return result;
@@ -64,11 +63,12 @@ export function calculateBollingerBands(data: MarketData[], count = 20, multipli
  * @returns { time, value } 형태의 배열
  */
 export function calculateRSI(data: MarketData[], count = 14) {
+  if (data.length <= count) return [];
+
   const result = [];
   let gains = 0;
   let losses = 0;
 
-  // 1. 첫 RSI 계산을 위한 초기 평균 승/패 계산 (단순 평균)
   for (let i = 1; i <= count; i++) {
     const change = data[i].close - data[i - 1].close;
     if (change > 0) gains += change;
@@ -78,7 +78,6 @@ export function calculateRSI(data: MarketData[], count = 14) {
   let avgGain = gains / count;
   let avgLoss = losses / count;
 
-  // 2. 이후 데이터에 대해 Wilder's Smoothing 기법 적용
   for (let i = count; i < data.length; i++) {
     const change = data[i].close - data[i - 1].close;
     
@@ -93,7 +92,7 @@ export function calculateRSI(data: MarketData[], count = 14) {
     const rs = avgGain / avgLoss;
     const rsi = 100 - (100 / (1 + rs));
 
-    result.push({ time: data[i].time.split('T')[0], value: rsi });
+    result.push({ time: data[i].time, value: rsi });
   }
   return result;
 }
@@ -118,34 +117,25 @@ function calculateEMA(data: { time: string; value: number }[], count: number) {
  * @returns { histogram, macd, signal }
  */
 export function calculateMACD(data: MarketData[]) {
-  const closeData = data.map(d => ({ time: d.time.split('T')[0], value: d.close }));
+  if (data.length < 26) return { macd: [], signal: [], histogram: [] };
+
+  const closeData = data.map(d => ({ time: d.time, value: d.close }));
   
   const ema12 = calculateEMA(closeData, 12);
   const ema26 = calculateEMA(closeData, 26);
 
   const macdLine = [];
-  const histogram = [];
-  const macdDataForSignal = [];
-
-  // MACD Line = EMA(12) - EMA(26)
   for (let i = 0; i < closeData.length; i++) {
     const val12 = ema12[i]?.value || 0;
     const val26 = ema26[i]?.value || 0;
-    const macd = val12 - val26;
-    
-    macdLine.push({ time: closeData[i].time, value: macd });
-    macdDataForSignal.push({ time: closeData[i].time, value: macd });
+    macdLine.push({ time: closeData[i].time, value: val12 - val26 });
   }
 
-  // Signal Line = MACD Line의 EMA(9)
-  const signalLine = calculateEMA(macdDataForSignal, 9);
-
-  // Histogram = MACD Line - Signal Line
-  for (let i = 0; i < macdLine.length; i++) {
-    const macd = macdLine[i].value;
-    const signal = signalLine[i]?.value || 0;
-    histogram.push({ time: macdLine[i].time, value: macd - signal });
-  }
+  const signalLine = calculateEMA(macdLine, 9);
+  const histogram = macdLine.map((m, i) => ({
+    time: m.time,
+    value: m.value - (signalLine[i]?.value || 0)
+  }));
 
   return { macd: macdLine, signal: signalLine, histogram };
 }
