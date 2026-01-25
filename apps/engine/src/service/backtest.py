@@ -69,11 +69,20 @@ def calculate_strategy(ticker: str, params: dict):
     # 누적 수익률 계산
     df['cum_ret'] = (1 + df['strategy_return'].fillna(0)).cumprod()
 
-    # NaN 제거 및 결과 반환
+    # NaN 제거
     df = df.dropna(subset=['cum_ret'])
 
+    # 프론트엔드가 즉시 사용할 수 있는 [{time, value}, ...] 구조로 변환
+    results = [
+        {
+            "time": str(t).split(' ')[0], 
+            "value": round(float(v), 4)
+        }
+        for t, v in zip(df['time'], df['cum_ret'])
+    ]
+
     return {
-        "dates": df['time'].astype(str).tolist(),
-        "values": [round(v, 4) for v in df['cum_ret'].tolist()],
+        "ticker": ticker,
+        "results": results,
         "final_return": round((df['cum_ret'].iloc[-1] - 1) * 100, 2)
     }

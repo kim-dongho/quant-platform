@@ -18,7 +18,6 @@ class BacktestRequest(BaseModel):
 def run_backtest_api(req: BacktestRequest):
     print(f"🚀 Running backtest for {req.ticker} with params: {req.params}")
     
-    # calculate_strategy(ticker, params) 구조에 맞게 호출
     result = calculate_strategy(req.ticker, req.params)
     
     if result is None:
