@@ -3,28 +3,43 @@ definitions:
   quant-server_internal_model.BacktestRequest:
     type: object
   quant-server_internal_model.MarketData:
+    description: 개별 일자의 시가, 고가, 저가, 종가 및 거래량 정보
     properties:
       close:
-        example: 114.1
+        example: 153.4
         type: number
       high:
-        example: 115.2
+        example: 155
         type: number
       low:
-        example: 111.05
+        example: 149.5
         type: number
       open:
-        example: 112.5
+        example: 150.25
         type: number
-      symbol:
-        example: NVDA
-        type: string
       time:
-        example: "2025-01-25"
+        example: "2024-01-25"
         type: string
       volume:
         example: 1200000
-        type: number
+        type: integer
+    type: object
+  quant-server_internal_model.StockHistoryResponse:
+    description: 주식의 기본 정보와 과거 시세 데이터를 포함합니다.
+    properties:
+      company_name:
+        example: NVIDIA Corporation
+        type: string
+        x-order: "2"
+      data:
+        items:
+          $ref: '#/definitions/quant-server_internal_model.MarketData'
+        type: array
+        x-order: "3"
+      symbol:
+        example: NVDA
+        type: string
+        x-order: "1"
     type: object
 host: localhost:8080
 info:
@@ -72,9 +87,9 @@ paths:
     get:
       consumes:
       - application/json
-      description: 특정 심볼의 과거 시세 데이터를 조회합니다.
+      description: 특정 심볼의 회사명과 과거 시세 데이터를 조회합니다.
       parameters:
-      - description: Stock Symbol (e.g., RKLB)
+      - description: Stock Symbol (e.g., NVDA)
         in: path
         name: symbol
         required: true
@@ -85,9 +100,13 @@ paths:
         "200":
           description: OK
           schema:
-            items:
-              $ref: '#/definitions/quant-server_internal_model.MarketData'
-            type: array
+            $ref: '#/definitions/quant-server_internal_model.StockHistoryResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "404":
           description: Not Found
           schema:

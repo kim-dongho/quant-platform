@@ -8,6 +8,6 @@ COPY go.sum* ./
 RUN go mod download
 
 COPY . .
-RUN go build -o main ./cmd/api
+RUN go build -o main ./cmd
 
 CMD ["./main"]

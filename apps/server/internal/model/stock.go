@@ -1,14 +1,22 @@
 package model
 
-// MarketData: DB의 market_data 테이블과 매핑되며 차트의 캔들을 구성하는 데이터
+// StockHistoryResponse 주식 히스토리 응답 구조체
+// @Description 주식의 기본 정보와 과거 시세 데이터를 포함합니다.
+type StockHistoryResponse struct {
+	Symbol      string       `json:"symbol" example:"NVDA" extensions:"x-order=1"`
+	CompanyName string       `json:"company_name" example:"NVIDIA Corporation" extensions:"x-order=2"`
+	Data        []MarketData `json:"data" extensions:"x-order=3"`
+}
+
+// MarketData 일자별 시세 데이터
+// @Description 개별 일자의 시가, 고가, 저가, 종가 및 거래량 정보
 type MarketData struct {
-	Time   string  `json:"time" gorm:"column:time" example:"2025-01-25"`
-	Open   float64 `json:"open" gorm:"column:open" example:"112.50"`
-	High   float64 `json:"high" gorm:"column:high" example:"115.20"`
-	Low    float64 `json:"low" gorm:"column:low" example:"111.05"`
-	Close  float64 `json:"close" gorm:"column:close" example:"114.10"`
-	Volume float64 `json:"volume" gorm:"column:volume" example:"1200000"`
-	Symbol string  `json:"symbol" gorm:"column:symbol" example:"NVDA"`
+	Time   string  `json:"time" example:"2024-01-25"`
+	Open   float64 `json:"open" example:"150.25"`
+	High   float64 `json:"high" example:"155.00"`
+	Low    float64 `json:"low" example:"149.50"`
+	Close  float64 `json:"close" example:"153.40"`
+	Volume int64   `json:"volume" example:"1200000"`
 }
 
 func (MarketData) TableName() string {

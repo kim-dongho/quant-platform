@@ -70,7 +70,7 @@ const docTemplate = `{
         },
         "/stocks/{symbol}/history": {
             "get": {
-                "description": "특정 심볼의 과거 시세 데이터를 조회합니다.",
+                "description": "특정 심볼의 회사명과 과거 시세 데이터를 조회합니다.",
                 "consumes": [
                     "application/json"
                 ],
@@ -84,7 +84,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Stock Symbol (e.g., RKLB)",
+                        "description": "Stock Symbol (e.g., NVDA)",
                         "name": "symbol",
                         "in": "path",
                         "required": true
@@ -94,9 +94,15 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/quant-server_internal_model.MarketData"
+                            "$ref": "#/definitions/quant-server_internal_model.StockHistoryResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
                             }
                         }
                     },
@@ -118,35 +124,55 @@ const docTemplate = `{
             "type": "object"
         },
         "quant-server_internal_model.MarketData": {
+            "description": "개별 일자의 시가, 고가, 저가, 종가 및 거래량 정보",
             "type": "object",
             "properties": {
                 "close": {
                     "type": "number",
-                    "example": 114.1
+                    "example": 153.4
                 },
                 "high": {
                     "type": "number",
-                    "example": 115.2
+                    "example": 155
                 },
                 "low": {
                     "type": "number",
-                    "example": 111.05
+                    "example": 149.5
                 },
                 "open": {
                     "type": "number",
-                    "example": 112.5
-                },
-                "symbol": {
-                    "type": "string",
-                    "example": "NVDA"
+                    "example": 150.25
                 },
                 "time": {
                     "type": "string",
-                    "example": "2025-01-25"
+                    "example": "2024-01-25"
                 },
                 "volume": {
-                    "type": "number",
+                    "type": "integer",
                     "example": 1200000
+                }
+            }
+        },
+        "quant-server_internal_model.StockHistoryResponse": {
+            "description": "주식의 기본 정보와 과거 시세 데이터를 포함합니다.",
+            "type": "object",
+            "properties": {
+                "symbol": {
+                    "type": "string",
+                    "x-order": "1",
+                    "example": "NVDA"
+                },
+                "company_name": {
+                    "type": "string",
+                    "x-order": "2",
+                    "example": "NVIDIA Corporation"
+                },
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/quant-server_internal_model.MarketData"
+                    },
+                    "x-order": "3"
                 }
             }
         }
