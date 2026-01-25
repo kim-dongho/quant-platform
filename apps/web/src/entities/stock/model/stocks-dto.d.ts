@@ -7,11 +7,7 @@ export interface getBacktestResultResponseDto {
 }
 
 export interface getStockHistoryResponseDto {
-  time: string;
   symbol: string;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume: number;
+  company_name: string;
+  data: MarketData[];
 }

@@ -15,7 +15,9 @@ export const StockDashboardWidget = () => {
   const [markers, setMarkers] = useState<SeriesMarker<string>[]>([]);
   const [loading, setLoading] = useState(true);
   const [symbol, setSymbol] = useState('NVDA');
-
+  // ✅ 1. 회사명 상태 추가
+  const [companyName, setCompanyName] = useState('');
+  
   const [indicators, setIndicators] = useState<ChartOptions>({ 
     volume: true, rsi: false, macd: false, sma: true , bollinger: false
   });
@@ -23,8 +25,7 @@ export const StockDashboardWidget = () => {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      // 시세와 백테스트 데이터를 병렬로 호출
-      const [history, backtestResponse] = await Promise.all([
+      const [historyResponse, backtestResponse] = await Promise.all([
         getStockHistory(symbol),
         getBacktestResult(symbol, {
           use_sma: true,
@@ -34,10 +35,17 @@ export const StockDashboardWidget = () => {
         })
       ]);
 
-      // Go 백엔드 데이터 주입 (캔들스틱)
-      setData(history);
+      // ✅ 2. 응답 구조 변경 반영 (historyResponse.data, historyResponse.company_name)
+      // 만약 백엔드에서 아직 이전 구조(배열)를 보낸다면 방어 로직 적용
+      if ('data' in historyResponse) {
+        setData(historyResponse.data);
+        setCompanyName(historyResponse.company_name);
+      } else {
+        // 하위 호환성 유지 (백엔드 수정 전 대비)
+        setData(historyResponse as unknown as MarketData[]);
+        setCompanyName('');
+      }
 
-      // Python 엔진 데이터 주입 (수익률 선)
       setBacktestLine(backtestResponse.results || []);
     } catch (err) {
       console.error("Dashboard Data Fetch Error:", err);
@@ -52,13 +60,23 @@ export const StockDashboardWidget = () => {
 
   return (
     <div className="space-y-4 p-6 bg-slate-950 min-h-screen">
+      {/* ✅ 3. 헤더 UI 개선: 회사명과 티커를 명확히 구분 */}
       <div className="flex justify-between items-end">
-        <div>
+        <div className="space-y-1">
            <div className="flex items-center gap-3">
-             <h1 className="text-4xl font-black text-white tracking-tighter">{symbol}</h1>
-             <span className="px-2 py-1 bg-emerald-500/10 text-emerald-500 text-xs rounded border border-emerald-500/20 font-bold">LIVE</span>
+             <h1 className="text-4xl font-black text-white tracking-tighter">
+                {companyName || symbol}
+             </h1>
+             <span className="text-2xl font-bold text-slate-500 tracking-tight uppercase">
+                {symbol}
+             </span>
+             <span className="px-2 py-1 bg-emerald-500/10 text-emerald-500 text-[10px] rounded border border-emerald-500/20 font-bold tracking-widest">
+                LIVE
+             </span>
            </div>
-           <p className="text-slate-400 text-sm mt-1">Algorithm: <span className="text-slate-200">SMA Crossover Strategy</span></p>
+           <p className="text-slate-400 text-sm">
+             Algorithm: <span className="text-emerald-400/80 font-medium">SMA Crossover Strategy</span>
+           </p>
         </div>
         <StockSearch onSearch={setSymbol} />
       </div>
@@ -92,15 +110,15 @@ export const StockDashboardWidget = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="md:col-span-2">
-            <TradeForm symbol={symbol} currentPrice={344.26} onOrderPlaced={fetchData} />
+            <TradeForm symbol={symbol} currentPrice={data[data.length-1]?.close || 0} onOrderPlaced={fetchData} />
         </div>
-        <div className="bg-slate-900 p-4 rounded-xl border border-slate-800">
-            <h3 className="text-slate-400 text-sm font-bold mb-2">Backtest Summary</h3>
-            <div className="text-2xl font-bold text-white">
+        <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex flex-col justify-center">
+            <h3 className="text-slate-400 text-xs font-bold mb-2 uppercase tracking-wider">Backtest Performance</h3>
+            <div className={`text-3xl font-black ${backtestLine.length > 0 && backtestLine[backtestLine.length-1].value >= 1 ? 'text-emerald-400' : 'text-rose-400'}`}>
                 {backtestLine.length > 0 ? 
-                  `+${((backtestLine[backtestLine.length-1].value - 1) * 100).toFixed(2)}%` : '--'}
+                  `${((backtestLine[backtestLine.length-1].value - 1) * 100).toFixed(2)}%` : '--'}
             </div>
-            <p className="text-xs text-slate-500 mt-1">Based on data</p>
+            <p className="text-[10px] text-slate-500 mt-1 uppercase">Cumulative Return since inception</p>
         </div>
       </div>
     </div>
