@@ -1,11 +1,13 @@
 import yfinance as yf
 import pandas as pd
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, text, MetaData, Table
+from sqlalchemy.dialects.postgresql import insert
 import os
 
 # Docker 내부 DB 주소
 DB_URL = os.getenv("DB_DSN", "postgresql://user:password@db:5432/quant")
 engine = create_engine(DB_URL)
+metadata = MetaData()
 
 def init_db():
     """테이블이 없으면 자동으로 생성하는 함수"""
@@ -44,7 +46,6 @@ def init_db():
             conn.execute(text(hypertable_sql))
             print("✅ Hypertable configured.")
         except Exception as e:
-            # 이미 하이퍼테이블이면 에러가 날 수 있으니 무시
             print(f"ℹ️ Hypertable check: {e}")
         conn.commit()
     print("✅ Database schema initialized.")
@@ -52,7 +53,8 @@ def init_db():
 def save_to_db(ticker):
     print(f"📥 Fetching data for {ticker}...")
     try:
-        df = yf.download(ticker, period="1y", interval="1d", progress=False)
+        # period="max"로 설정하여 전체 데이터 다운로드
+        df = yf.download(ticker, period="max", interval="1d", progress=False)
     except Exception as e:
         print(f"❌ Download failed for {ticker}: {e}")
         return
@@ -78,23 +80,35 @@ def save_to_db(ticker):
     df = df[available_cols].copy()
     df['symbol'] = ticker
 
+    # 데이터프레임을 딕셔너리 리스트로 변환 (Upsert용)
+    data_to_insert = df.to_dict(orient='records')
+
     try:
         with engine.connect() as conn:
-            # 종목 먼저 등록
+            # 1. 종목 등록
             conn.execute(text(
                 "INSERT INTO stocks (symbol, name) VALUES (:tick, :tick) ON CONFLICT (symbol) DO NOTHING"
             ), {"tick": ticker})
             conn.commit()
             
-            # 데이터 저장
-            df.to_sql('market_data', engine, if_exists='append', index=False, method='multi', chunksize=1000)
-            print(f"✅ Saved {len(df)} rows for {ticker}")
+            # 2. 데이터 저장 (Upsert: 중복되면 건너뛰기)
+            if data_to_insert:
+                # 🛠️ [수정됨] DB에서 테이블 정보를 읽어와서 객체로 만듦
+                market_data_table = Table('market_data', metadata, autoload_with=engine)
+                
+                # 🛠️ [수정됨] 문자열 대신 테이블 객체를 넣음
+                stmt = insert(market_data_table).values(data_to_insert)
+                
+                # 중복 시(Do Nothing) 설정
+                stmt = stmt.on_conflict_do_nothing(index_elements=['time', 'symbol'])
+                
+                # 실행
+                conn.execute(stmt)
+                conn.commit()
+                print(f"✅ Saved {len(df)} rows for {ticker} (Duplicates skipped)")
             
     except Exception as e:
-        if "unique constraint" in str(e).lower():
-            print(f"ℹ️ Data for {ticker} already exists.")
-        else:
-            print(f"❌ DB Error for {ticker}: {e}")
+        print(f"❌ DB Error for {ticker}: {e}")
 
 # 모듈이 로드될 때 테이블 생성 함수 실행 (자동 복구)
 init_db()
