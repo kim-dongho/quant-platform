@@ -1,4 +1,4 @@
-import { MarketData } from '../model/types';
+import { MarketData } from '../model/stocks-common';
 
 /**
  * 단순 이동평균(SMA) 계산 함수

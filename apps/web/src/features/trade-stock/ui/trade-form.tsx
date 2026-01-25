@@ -8,7 +8,7 @@ import { useState } from 'react';
 interface Props {
   symbol: string;
   currentPrice: number;
-  onOrderPlaced: () => void; // 주문 성공 시 부모에게 알림 (차트 갱신용)
+  onOrderPlaced: () => void;
 }
 
 export const TradeForm = ({ symbol, currentPrice, onOrderPlaced }: Props) => {

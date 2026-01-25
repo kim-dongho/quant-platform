@@ -19,7 +19,7 @@ const eslintConfig = [
   // 커스텀 룰
   {
     rules: {
-      "prettier/prettier": "error", // 스타일 틀리면 에러 표시
+      "prettier/prettier": "error",
       "@typescript-eslint/no-unused-vars": "error",
       "@typescript-eslint/no-explicit-any": "warn",
       "react/display-name": "off",

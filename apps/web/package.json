@@ -11,6 +11,7 @@
     "fix": "next lint --fix && npm run format"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.90.20",
     "axios": "^1.13.2",
     "clsx": "^2.1.1",
     "lightweight-charts": "^4.2.2",

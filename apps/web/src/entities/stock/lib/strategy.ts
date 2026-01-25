@@ -1,5 +1,5 @@
 // src/entities/stock/lib/strategy.ts
-import { MarketData } from '../model/types';
+import { MarketData } from '../model/stocks-common';
 import { calculateSMA, calculateRSI } from './indicators'; // RSI 추가 import
 import { SeriesMarker } from 'lightweight-charts';
 

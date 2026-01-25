@@ -13,4 +13,6 @@ export interface ChartOptions {
   rsi: boolean;
   macd: boolean;
   bollinger: boolean;
+  sma: boolean;
 }
+
