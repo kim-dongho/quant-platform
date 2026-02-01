@@ -23,7 +23,7 @@ export const StockDashboardWidget = () => {
     useDashboardLogic();
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-slate-950 p-4 text-slate-200">
+    <div className="flex h-screen flex-col gap-4 overflow-hidden bg-slate-950 p-4 text-slate-200">
       <div className="mb-4 shrink-0">
         {companyName ? (
           <DashboardHeader companyName={companyName} symbol={symbol} onSearch={setSymbol} />
