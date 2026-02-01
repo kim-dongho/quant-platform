@@ -1,6 +1,7 @@
 'use client';
 
 import { ChartControls } from '@/features/chart-control/ui/chart-control';
+import { IndicatorSelector } from '@/features/chart-control/ui/indicator-selector';
 import { TradeForm } from '@/features/trade-stock/ui/trade-form';
 
 import { StockChart } from '@/entities/stock/ui/stock-chart';
@@ -36,16 +37,15 @@ export const StockDashboardWidget = () => {
           <PerformanceCard data={backtestLine} />
 
           <ChartControls
-            options={indicators}
             params={strategyParams}
-            onChange={toggleIndicator}
             onParamChange={setStrategyParam}
             onApply={refetch}
           />
         </aside>
 
         <main className="col-span-12 flex h-full flex-col gap-4 md:col-span-9 lg:col-span-9 xl:col-span-9">
-          <div className="relative min-h-0 flex-1 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl">
+          <IndicatorSelector options={indicators} onChange={toggleIndicator} />
+          <div className="relative min-h-0 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl">
             {isLoading && (
               <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-950/80 backdrop-blur-sm">
                 <div className="mb-4 h-12 w-12 animate-spin rounded-full border-4 border-emerald-500 border-t-transparent" />

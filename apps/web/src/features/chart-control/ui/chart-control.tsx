@@ -2,29 +2,20 @@ import type { StrategyParams } from '@/widgets/stock-dashboard/model/dashborad-s
 
 import { ChartOptions } from '@/entities/stock/model/stocks-common';
 
-import { IndicatorSelector } from './indicator-selector';
 import { StrategyControls } from './strategy-controls';
 
 interface Props {
-  options: ChartOptions;
   params: StrategyParams;
 
-  onChange: (key: keyof ChartOptions) => void;
   onParamChange: (key: keyof StrategyParams, value: number | boolean) => void;
   onApply: () => void;
 }
 
-export const ChartControls = ({ options, params, onChange, onParamChange, onApply }: Props) => {
+export const ChartControls = ({ params, onParamChange, onApply }: Props) => {
   return (
     <div className="flex flex-col gap-4 rounded-xl border border-slate-800 bg-slate-900/80 p-5 shadow-sm">
       {/* 전략 설정 영역 */}
       <StrategyControls params={params} onParamChange={onParamChange} onApply={onApply} />
-
-      {/* 구분선 */}
-      <div className="h-px w-full bg-slate-800" />
-
-      {/* 지표 선택 영역 */}
-      <IndicatorSelector options={options} onChange={onChange} />
     </div>
   );
 };

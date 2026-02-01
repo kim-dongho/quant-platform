@@ -7,7 +7,7 @@ interface Props {
 
 export const IndicatorSelector = ({ options, onChange }: Props) => {
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-900 px-3 py-4 shadow-2xl">
       <span className="text-xs font-bold tracking-wider text-slate-500 uppercase">
         Visual Indicators
       </span>
