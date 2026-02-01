@@ -12,15 +12,16 @@ export const useStockHistoryQuery = (symbol: string) => {
     },
     staleTime: 1000 * 60 * 5,
     enabled: !!symbol,
+    retry: 1,
   });
 };
 
 // 백테스트 쿼리
-export const useBacktestQuery = (symbol: string, params: any) => {
+export const useBacktestQuery = (symbol: string, params: any, enabled: boolean = true) => {
   return useQuery({
     queryKey: ['backtest', symbol, params],
     queryFn: () => getBacktestResult(symbol, params),
     staleTime: 1000 * 60 * 1,
-    enabled: !!symbol,
+    enabled: !!symbol && enabled,
   });
 };

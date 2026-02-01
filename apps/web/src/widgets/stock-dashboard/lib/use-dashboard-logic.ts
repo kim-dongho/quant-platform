@@ -11,9 +11,9 @@ export const useDashboardLogic = () => {
   const params = useDashboardStore((s) => s.strategyParams);
 
   const historyQuery = useStockHistoryQuery(symbol);
-  const backtestQuery = useBacktestQuery(symbol, params);
+  const backtestQuery = useBacktestQuery(symbol, params, !!historyQuery.data);
 
-  // ✅ 데이터 병합과 동시에 마커(Markers) 배열 생성
+  // 데이터 병합과 동시에 마커(Markers) 배열 생성
   const { mergedData, markers } = useMemo(() => {
     const rawData = historyQuery.data?.data;
     const results = backtestQuery.data?.results;
@@ -73,7 +73,7 @@ export const useDashboardLogic = () => {
     currentPrice: mergedData[mergedData.length - 1]?.close || 0,
     refetch: () => {
       historyQuery.refetch();
-      backtestQuery.refetch();
+      if (historyQuery.data) backtestQuery.refetch();
     },
   };
 };
