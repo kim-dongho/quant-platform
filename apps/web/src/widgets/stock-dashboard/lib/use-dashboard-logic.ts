@@ -27,22 +27,22 @@ export const useDashboardLogic = () => {
     const merged = rawData.map((candle: any) => {
       const indicators = indicatorMap.get(candle.time);
 
-      // 🎯 매매 신호가 있으면 마커 생성
+      // 매매 신호가 있으면 마커 생성
       if (indicators?.action) {
         if (indicators.action === 'buy') {
           generatedMarkers.push({
             time: candle.time,
             position: 'belowBar', // 캔들 아래에 표시
-            color: '#22c55e', // 초록색
+            color: '#2196F3',
             shape: 'arrowUp', // 위쪽 화살표
             text: 'BUY',
-            size: 2, // 크기 조절 (기본값 1)
+            size: 2,
           });
         } else if (indicators.action === 'sell') {
           generatedMarkers.push({
             time: candle.time,
             position: 'aboveBar', // 캔들 위에 표시
-            color: '#ef4444', // 빨간색
+            color: '#e91e63',
             shape: 'arrowDown', // 아래쪽 화살표
             text: 'SELL',
             size: 2,
