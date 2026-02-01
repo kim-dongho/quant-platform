@@ -4,6 +4,7 @@ import pandas_ta as ta
 from src.core.database import engine
 
 def calculate_strategy(ticker: str, params: dict):
+    # 1. 데이터 로드
     query = f"SELECT time, open, high, low, close, volume FROM market_data WHERE symbol = '{ticker}' ORDER BY time ASC"
     df = pd.read_sql(query, engine)
     
@@ -11,22 +12,29 @@ def calculate_strategy(ticker: str, params: dict):
         return {"error": "No data"}
 
     df.columns = [c.lower() for c in df.columns]
+    df['time'] = pd.to_datetime(df['time'])
 
-    # 1. 지표 계산
+    # 2. 지표 계산 (Indicators)
+    # 이평선
     df['sma_s'] = ta.sma(df['close'], length=params.get('sma_short', 5))
     df['sma_l'] = ta.sma(df['close'], length=params.get('sma_long', 20))
+    
+    # RSI
     df['rsi'] = ta.rsi(df['close'], length=params.get('rsi_period', 14))
     
+    # MACD
     macd = ta.macd(df['close'])
-    df['macd'] = macd.iloc[:, 0]
-    df['macd_s'] = macd.iloc[:, 2]
+    df['macd'] = macd.iloc[:, 0]    # MACD Line
+    df['macd_s'] = macd.iloc[:, 2]  # Signal Line
+    df['macd_h'] = macd.iloc[:, 1]  # Histogram
 
-    # ---------------------------------------------------------
-    # 🧠 핵심 로직: 포지션 기반 백테스팅
-    # ---------------------------------------------------------
-    # - 매수(Buy): 단기 이평선이 장기 이평선 위에 있고(정배열), RSI가 너무 높지 않을 때
-    # - 매도(Sell): 단기 이평선이 장기 이평선을 하향 돌파할 때
-    
+    # 볼린저 밴드 (Bollinger Bands) ✅ 추가
+    bbands = ta.bbands(df['close'], length=20, std=2)
+    df['bb_l'] = bbands.iloc[:, 0]  # Lower Band
+    df['bb_m'] = bbands.iloc[:, 1]  # Middle Band
+    df['bb_u'] = bbands.iloc[:, 2]  # Upper Band
+
+    # 3. 핵심 로직: 포지션 기반 백테스팅
     df['signal'] = 0
     position = 0  # 0: 현금, 1: 주식 보유
     signals = []
@@ -37,12 +45,11 @@ def calculate_strategy(ticker: str, params: dict):
         sma_s = df['sma_s'].iloc[i]
         sma_l = df['sma_l'].iloc[i]
 
-        # 데이터가 충분치 않으면 패스
         if pd.isna(sma_l) or pd.isna(current_rsi):
             signals.append(0)
             continue
 
-        # 매수 조건: 정배열 진입 + RSI가 과매수(예: 70)가 아닐 때
+        # 매수 조건: 정배열 진입 + RSI 필터
         if position == 0:
             if sma_s > sma_l and current_rsi < params.get('rsi_buy_k', 60):
                 position = 1
@@ -50,41 +57,43 @@ def calculate_strategy(ticker: str, params: dict):
             else:
                 signals.append(0)
         
-        # 매도 조건: 역배열 발생 시 즉시 매도 (리스크 관리)
+        # 매도 조건: 역배열 발생 시 즉시 매도
         elif position == 1:
             if sma_s < sma_l:
                 position = 0
                 signals.append(0)
             else:
-                signals.append(1) # 보유 유지
+                signals.append(1) 
 
     df['position'] = signals
 
-    # ---------------------------------------------------------
-    # 💰 수익률 계산
-    # ---------------------------------------------------------
+    # 4. 수익률 계산
     df['pct_change'] = df['close'].pct_change().shift(-1)
     df['strategy_return'] = df['pct_change'] * df['position']
-    
-    # 누적 수익률 계산
     df['cum_ret'] = (1 + df['strategy_return'].fillna(0)).cumprod()
 
+    # 5. 데이터 정제 (중복 제거 및 포맷팅)
     df['time_str'] = df['time'].dt.strftime('%Y-%m-%d')
-    
-    # - 동일 날짜가 여러 번 나오는 경우 마지막 데이터만 유지 (중복 방지)
-    df_clean = df.drop_duplicates(subset=['time_str'], keep='last')
-    
-    # - NaN 데이터 제거 (지표 계산 초기에 발생하는 NaN 행 삭제)
+    df_clean = df.drop_duplicates(subset=['time_str'], keep='last').copy()
     df_clean = df_clean.dropna(subset=['cum_ret'])
 
-    # 프론트엔드가 즉시 사용할 수 있는 [{time, value}, ...] 구조로 변환
-    results = [
-        {
-            "time": t, 
-            "value": round(float(v), 4)
+    # 
+
+    # 6. 결과 패킹 (프론트엔드 Stack 구조를 위한 데이터 포함)
+    results = []
+    for _, row in df_clean.iterrows():
+        item = {
+            "time": row['time_str'],
+            "value": round(float(row['cum_ret']), 4),
+            # 보조지표 데이터 추가 (null 체크 포함)
+            "rsi": round(float(row['rsi']), 2) if not pd.isna(row['rsi']) else None,
+            "macd": round(float(row['macd']), 2) if not pd.isna(row['macd']) else None,
+            "macd_h": round(float(row['macd_h']), 2) if not pd.isna(row['macd_h']) else None,
+            "bb_u": round(float(row['bb_u']), 2) if not pd.isna(row['bb_u']) else None,
+            "bb_m": round(float(row['bb_m']), 2) if not pd.isna(row['bb_m']) else None,
+            "bb_l": round(float(row['bb_l']), 2) if not pd.isna(row['bb_l']) else None,
         }
-        for t, v in zip(df_clean['time_str'], df_clean['cum_ret'])
-    ]
+        results.append(item)
 
     return {
         "ticker": ticker,
