@@ -4,24 +4,32 @@ import { useEffect, useRef } from 'react';
 
 import { ColorType, IChartApi, LineStyle, SeriesMarker, createChart } from 'lightweight-charts';
 
-import { calculateMACD, calculateRSI, calculateSMA } from '../lib/indicators';
 import { ChartOptions, MarketData } from '../model/stocks-common';
 
 interface Props {
   data: MarketData[];
   backtestData?: { time: string; value: number }[];
-  markers?: SeriesMarker<string>[];
   visibleIndicators: ChartOptions;
 }
 
-export const StockChart = ({ data, backtestData = [], markers = [], visibleIndicators }: Props) => {
+export const StockChart = ({ data, backtestData = [], visibleIndicators }: Props) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
 
   useEffect(() => {
     if (!chartContainerRef.current || data.length === 0) return;
 
-    // 1. 차트 초기화 (높이를 700으로 늘려 하단 지표 공간 확보)
+    // 1. 하단 패널(Pane) 개수 계산
+    // RSI와 MACD가 켜져 있는지 확인하여 필요한 하단 여백을 계산합니다.
+    const paneHeight = 0.15; // 각 지표당 높이 15%
+    let activePanes = 0;
+    if (visibleIndicators.rsi) activePanes++;
+    if (visibleIndicators.macd) activePanes++;
+
+    // 메인 차트가 확보해야 할 하단 여백 (지표 개수 * 높이)
+    const mainChartBottomMargin = activePanes * paneHeight;
+
+    // 2. 차트 생성
     const chart = createChart(chartContainerRef.current, {
       layout: {
         background: { type: ColorType.Solid, color: '#0f172a' },
@@ -29,31 +37,40 @@ export const StockChart = ({ data, backtestData = [], markers = [], visibleIndic
       },
       grid: { vertLines: { color: '#1e293b' }, horzLines: { color: '#1e293b' } },
       width: chartContainerRef.current.clientWidth,
-      height: 700, // 스택 구조를 위해 높이 증가
-      leftPriceScale: {
-        visible: backtestData.length > 0,
-        borderColor: '#334155',
-        scaleMargins: { top: 0.1, bottom: 0.7 }, // 상단 20% 영역에 수익률 곡선 배치
-      },
+      height: 600,
+
+      // 메인 차트 (캔들) 영역 설정
       rightPriceScale: {
         visible: true,
         borderColor: '#334155',
-        scaleMargins: { top: 0.1, bottom: 0.4 }, // 메인 캔들 영역은 상단 60% 사용
+        scaleMargins: {
+          top: 0.05,
+          bottom: mainChartBottomMargin + 0.05, // 지표 영역만큼 비워둠 (+여유분)
+        },
       },
-      timeScale: { borderColor: '#334155', barSpacing: 12 },
+      // 수익률 차트 (좌측) 영역 설정
+      leftPriceScale: {
+        visible: backtestData.length > 0,
+        borderColor: '#334155',
+        scaleMargins: {
+          top: 0.05,
+          bottom: mainChartBottomMargin + 0.05,
+        },
+      },
+      timeScale: { borderColor: '#334155', barSpacing: 10 },
     });
     chartRef.current = chart;
 
-    // --- 2. 전략 수익률 곡선 (Left Axis) ---
+    // --- 3. 시리즈 추가 ---
+
+    // (1) 수익률 라인
     if (backtestData.length > 0) {
       const strategySeries = chart.addLineSeries({
-        color: '#fbbf24', // amber-400 (가독성을 위해 색상 변경)
+        color: '#fbbf24',
         lineWidth: 2,
         priceScaleId: 'left',
-        title: 'Equity',
       });
       strategySeries.setData(backtestData);
-
       strategySeries.createPriceLine({
         price: 1.0,
         color: '#f43f5e',
@@ -63,7 +80,7 @@ export const StockChart = ({ data, backtestData = [], markers = [], visibleIndic
       });
     }
 
-    // --- 3. 캔들스틱 (Right Axis) ---
+    // (2) 캔들스틱
     const candleSeries = chart.addCandlestickSeries({
       upColor: '#22c55e',
       downColor: '#ef4444',
@@ -74,129 +91,133 @@ export const StockChart = ({ data, backtestData = [], markers = [], visibleIndic
     });
     candleSeries.setData(data as any);
 
-    if (markers.length > 0) {
-      candleSeries.setMarkers(markers);
-    }
-
-    // --- 4. SMA 지표 (Right Axis - Overlay) ---
-    if (visibleIndicators.sma) {
+    // (3) 이동평균선 (SMA)
+    if (visibleIndicators.sma && data[0]?.sma) {
       const smaSeries = chart.addLineSeries({
         color: '#eab308',
         lineWidth: 1,
-        title: 'SMA 20',
         priceScaleId: 'right',
       });
-      smaSeries.setData(calculateSMA(data, 20));
+      smaSeries.setData(data.map((d) => ({ time: d.time, value: d.sma! })));
     }
 
-    // ✅ --- 5. 볼린저 밴드 (Right Axis - Overlay) ---
-    // 데이터에 bb_u, bb_m, bb_l이 있을 때만 렌더링
-    if (visibleIndicators.bollinger && data[0]?.bb_u) {
-      const createBBLine = (color: string) =>
+    // (4) 볼린저 밴드
+    if (visibleIndicators.bollinger && data.some((d) => typeof d.bb_u === 'number')) {
+      const createBB = (color: string) =>
         chart.addLineSeries({
           color,
           lineWidth: 1,
           lineStyle: LineStyle.Dashed,
           priceScaleId: 'right',
-          lastValueVisible: false,
-          priceLineVisible: false,
         });
-
-      const upperLine = createBBLine('#3b82f6');
-      const middleLine = createBBLine('#6366f1');
-      const lowerLine = createBBLine('#3b82f6');
-
-      upperLine.setData(data.map((d) => ({ time: d.time, value: d.bb_u as number })));
-      middleLine.setData(data.map((d) => ({ time: d.time, value: d.bb_m as number })));
-      lowerLine.setData(data.map((d) => ({ time: d.time, value: d.bb_l as number })));
+      const u = createBB('#3b82f6'),
+        m = createBB('#6366f1'),
+        l = createBB('#3b82f6');
+      u.setData(
+        data
+          .filter((d) => typeof d.bb_u === 'number')
+          .map((d) => ({ time: d.time, value: d.bb_u! })),
+      );
+      m.setData(
+        data
+          .filter((d) => typeof d.bb_m === 'number')
+          .map((d) => ({ time: d.time, value: d.bb_m! })),
+      );
+      l.setData(
+        data
+          .filter((d) => typeof d.bb_l === 'number')
+          .map((d) => ({ time: d.time, value: d.bb_l! })),
+      );
     }
 
-    const hasBB = data.some(d => d.bb_u !== undefined && d.bb_u !== null);
-    if (visibleIndicators.bollinger && hasBB) {
-      const createBBLine = (color: string) => chart.addLineSeries({
-        color, lineWidth: 1, lineStyle: LineStyle.Dashed,
-        priceScaleId: 'right', lastValueVisible: false, priceLineVisible: false,
+    // ✅ --- 4. 하단 지표 스택 (RSI & MACD) 로직 수정 ---
+
+    let currentPaneIndex = 0; // 지표 순서 (아래에서부터 0, 1...)
+
+    // MACD 그리기 (맨 아래 배치)
+    if (visibleIndicators.macd && data.some((d) => typeof d.macd_h === 'number')) {
+      const macdSeries = chart.addHistogramSeries({
+        priceScaleId: 'macd',
+        title: 'MACD',
       });
 
-      const upper = createBBLine('#3b82f6');
-      const middle = createBBLine('#6366f1');
-      const lower = createBBLine('#3b82f6');
+      // 영역 계산: 맨 아래(bottom: 0)부터 paneHeight만큼 차지
+      // top은 위에서부터의 거리이므로: 1 - (현재높이 + 패널높이)
+      const bottomMargin = currentPaneIndex * paneHeight;
+      const topMargin = 1 - (bottomMargin + paneHeight);
 
-      // 데이터 매핑 시 null 방어
-      upper.setData(data.filter(d => d.bb_u).map(d => ({ time: d.time, value: d.bb_u! })));
-      middle.setData(data.filter(d => d.bb_m).map(d => ({ time: d.time, value: d.bb_m! })));
-      lower.setData(data.filter(d => d.bb_l).map(d => ({ time: d.time, value: d.bb_l! })));
-    }
-
-    // ✅ --- 6. 보조 지표 패널 분리 (Stack 구조) ---
-    let currentBottom = 0; // 최하단부터 쌓아 올림
-
-    const hasMACD = data.some(d => typeof d.macd_h === 'number');
-
-if (visibleIndicators.macd && hasMACD) {
-  const macdHistogram = chart.addHistogramSeries({
-    priceScaleId: 'macd',
-    title: 'MACD Hist',
-  });
-  
-  chart.priceScale('macd').applyOptions({
-    visible: true,
-    scaleMargins: { top: 0.85, bottom: 0 },
-  });
-
-  // null이나 undefined인 아이템은 차트 엔진에 전달하지 않도록 필터링
-  const validMacdData = data
-    .filter(d => typeof d.macd_h === 'number') // 오직 숫자 타입만 허용
-    .map(d => ({
-      time: d.time,
-      value: d.macd_h as number,
-      color: (d.macd_h as number) >= 0 ? '#10b981' : '#ef4444'
-    }));
-
-  macdHistogram.setData(validMacdData);
-}
-    // RSI 패널 (MACD 위 또는 최하단)
-    if (visibleIndicators.rsi && data[0]?.rsi) {
-      // ✅ 시리즈 생성
-      const rsiSeries = chart.addLineSeries({
-        color: '#a855f7',
-        lineWidth: 1,
-        priceScaleId: 'rsi', // 여기서 ID를 지정하면 내부적으로 생성됩니다.
-        title: 'RSI',
-      });
-
-      // ✅ 동적으로 생성된 'rsi' 축의 옵션을 설정 (여기서 visible: true 효과가 발생)
-      chart.priceScale('rsi').applyOptions({
+      chart.priceScale('macd').applyOptions({
         visible: true,
-        borderColor: '#334155',
         scaleMargins: {
-          top: 1 - (currentBottom + 0.15),
-          bottom: currentBottom,
+          top: topMargin, // 예: 0.85
+          bottom: bottomMargin, // 예: 0
         },
       });
 
-      rsiSeries.setData(data.map((d) => ({ time: d.time, value: d.rsi as number })));
-      currentBottom += 0.2; // 간격을 조금 더 넓게 조정
+      macdSeries.setData(
+        data
+          .filter((d) => typeof d.macd_h === 'number')
+          .map((d) => ({
+            time: d.time,
+            value: d.macd_h!,
+            color: d.macd_h! >= 0 ? '#10b981' : '#ef4444',
+          })),
+      );
+
+      currentPaneIndex++; // 다음 지표를 위해 인덱스 증가
     }
 
-    // 반응형 대응
+    // RSI 그리기 (MACD 바로 위)
+    if (visibleIndicators.rsi && data.some((d) => typeof d.rsi === 'number')) {
+      const rsiSeries = chart.addLineSeries({
+        color: '#a855f7',
+        lineWidth: 1,
+        priceScaleId: 'rsi',
+        title: 'RSI',
+      });
+
+      // 영역 계산
+      const bottomMargin = currentPaneIndex * paneHeight;
+      const topMargin = 1 - (bottomMargin + paneHeight);
+
+      chart.priceScale('rsi').applyOptions({
+        visible: true,
+        scaleMargins: {
+          top: topMargin, // 예: 0.70 (MACD가 있으면)
+          bottom: bottomMargin, // 예: 0.15 (MACD가 있으면)
+        },
+      });
+
+      rsiSeries.setData(
+        data.filter((d) => typeof d.rsi === 'number').map((d) => ({ time: d.time, value: d.rsi! })),
+      );
+      rsiSeries.createPriceLine({
+        price: 70,
+        color: '#475569',
+        lineStyle: LineStyle.Dashed,
+        axisLabelVisible: true,
+      });
+      rsiSeries.createPriceLine({
+        price: 30,
+        color: '#475569',
+        lineStyle: LineStyle.Dashed,
+        axisLabelVisible: true,
+      });
+
+      currentPaneIndex++;
+    }
+
+    // 반응형
     const handleResize = () => {
-      if (chartContainerRef.current) {
+      if (chartContainerRef.current)
         chart.applyOptions({ width: chartContainerRef.current.clientWidth });
-      }
     };
     window.addEventListener('resize', handleResize);
-
     return () => {
       window.removeEventListener('resize', handleResize);
       chart.remove();
     };
-  }, [data, backtestData, markers, visibleIndicators]);
+  }, [data, backtestData, visibleIndicators]);
 
-  return (
-    <div
-      ref={chartContainerRef}
-      className="w-full overflow-hidden rounded-lg border border-slate-800 bg-slate-900"
-    />
-  );
+  return <div ref={chartContainerRef} className="h-full w-full" />;
 };
