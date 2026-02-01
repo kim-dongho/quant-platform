@@ -22,7 +22,11 @@ export const StockDashboardWidget = () => {
   return (
     <div className="min-h-screen space-y-4 bg-slate-950 p-6">
       {/* 헤더 섹션 */}
-      <DashboardHeader companyName={companyName} symbol={symbol} onSearch={setSymbol} />
+      {!isLoading ? (
+        <DashboardHeader companyName={companyName} symbol={symbol} onSearch={setSymbol} />
+      ) : (
+        <div className="h-22 w-full animate-pulse rounded-xl bg-slate-900/50" />
+      )}
 
       {/* 컨트롤 패널 */}
       <ChartControls

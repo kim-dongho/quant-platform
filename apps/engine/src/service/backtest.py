@@ -97,6 +97,9 @@ def calculate_strategy(ticker: str, params: dict):
             "time": row['time_str'],
             "value": round(float(row['cum_ret']), 4) if not pd.isna(row['cum_ret']) else 1.0,
             
+            "sma_s": round(float(row['sma_s']), 2) if not pd.isna(row['sma_s']) else None,
+            "sma_l": round(float(row['sma_l']), 2) if not pd.isna(row['sma_l']) else None,
+            
             "rsi": round(float(row['rsi']), 2) if not pd.isna(row['rsi']) else None,
             "macd": round(float(row['macd']), 2) if not pd.isna(row['macd']) else None,
             "macd_h": round(float(row['macd_h']), 2) if not pd.isna(row['macd_h']) else None,

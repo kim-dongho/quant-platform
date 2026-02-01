@@ -52,6 +52,8 @@ export const useDashboardLogic = () => {
 
       return {
         ...candle,
+        sma_s: indicators?.sma_s,
+        sma_l: indicators?.sma_l,
         rsi: indicators?.rsi,
         macd: indicators?.macd,
         macd_h: indicators?.macd_h,

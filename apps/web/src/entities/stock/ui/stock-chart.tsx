@@ -98,13 +98,36 @@ export const StockChart = ({ data, backtestData = [], visibleIndicators, markers
     }
 
     // (3) 이동평균선 (SMA)
-    if (visibleIndicators.sma && data[0]?.sma) {
-      const smaSeries = chart.addLineSeries({
-        color: '#eab308',
-        lineWidth: 1,
-        priceScaleId: 'right',
-      });
-      smaSeries.setData(data.map((d) => ({ time: d.time, value: d.sma! })));
+    if (visibleIndicators.sma) {
+      // 🟡 단기 이평선 (Short) - 노란색
+      if (data.some((d) => typeof d.sma_s === 'number')) {
+        const smaShortSeries = chart.addLineSeries({
+          color: '#fbbf24', // Yellow 400
+          lineWidth: 2,
+          priceScaleId: 'right',
+          title: 'SMA Short',
+        });
+        smaShortSeries.setData(
+          data
+            .filter((d) => typeof d.sma_s === 'number')
+            .map((d) => ({ time: d.time, value: d.sma_s! })),
+        );
+      }
+
+      // 🔵 장기 이평선 (Long) - 파란색
+      if (data.some((d) => typeof d.sma_l === 'number')) {
+        const smaLongSeries = chart.addLineSeries({
+          color: '#60a5fa', // Blue 400
+          lineWidth: 2,
+          priceScaleId: 'right',
+          title: 'SMA Long',
+        });
+        smaLongSeries.setData(
+          data
+            .filter((d) => typeof d.sma_l === 'number')
+            .map((d) => ({ time: d.time, value: d.sma_l! })),
+        );
+      }
     }
 
     // (4) 볼린저 밴드
