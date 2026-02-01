@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from src.service.backtest import calculate_strategy
+from src.service.ingest import save_to_db
 from typing import Dict, Any, Optional
 
 router = APIRouter()
@@ -25,4 +26,19 @@ def run_backtest_api(req: BacktestRequest):
         
     return result
 
+@router.post("/ingest/{ticker}")
+def ingest_data_api(ticker: str):
+    print(f"📥 Starting ingestion for: {ticker}")
     
+    try:
+        # Service Layer 호출
+        result = save_to_db(ticker)
+        return result
+        
+    except ValueError as e:
+        # Yahoo Finance에 없는 종목 등
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        # 기타 서버 에러
+        print(f"❌ Ingestion failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
