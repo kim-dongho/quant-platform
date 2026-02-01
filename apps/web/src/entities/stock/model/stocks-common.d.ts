@@ -6,6 +6,15 @@ export interface MarketData {
   low: number;
   close: number;
   volume: number;
+  
+  sma?: number;
+  rsi?: number;
+  macd?: number;
+  macd_s?: number; // Signal
+  macd_h?: number; // Histogram
+  bb_u?: number;   // Upper
+  bb_m?: number;   // Middle
+  bb_l?: number;   // Lower
 }
 
 export interface ChartOptions {
