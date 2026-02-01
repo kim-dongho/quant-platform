@@ -21,9 +21,6 @@ export const DashboardHeader = ({ companyName, symbol, onSearch }: Props) => (
           LIVE
         </span>
       </div>
-      <p className="text-sm text-slate-400">
-        Algorithm: <span className="font-medium text-emerald-400/80">SMA Crossover Strategy</span>
-      </p>
     </div>
     <StockSearch onSearch={onSearch} />
   </div>

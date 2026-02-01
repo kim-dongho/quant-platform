@@ -1,0 +1,46 @@
+export const STRATEGY_PRESETS = [
+  {
+    id: 'trend',
+    name: 'Trend Master',
+    desc: 'SMA + MACD',
+    config: {
+      enable_sma: true,
+      enable_rsi: false,
+      enable_macd: true,
+      enable_bb: false,
+      sma_short: 5,
+      sma_long: 20,
+      macd_fast: 12,
+      macd_slow: 26,
+      macd_sig: 9,
+    },
+  },
+  {
+    id: 'reversal',
+    name: 'Box Trader',
+    desc: 'RSI + B.Bands',
+    config: {
+      enable_sma: false,
+      enable_rsi: true,
+      enable_macd: false,
+      enable_bb: true,
+      rsi_buy_k: 30,
+      bb_window: 20,
+      bb_std: 2,
+    },
+  },
+  {
+    id: 'hybrid',
+    name: 'Standard Hybrid',
+    desc: 'SMA + RSI',
+    config: {
+      enable_sma: true,
+      enable_rsi: true,
+      enable_macd: false,
+      enable_bb: false,
+      sma_short: 5,
+      sma_long: 20,
+      rsi_buy_k: 60,
+    },
+  },
+];
