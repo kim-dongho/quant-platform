@@ -67,7 +67,7 @@ export const StockChart = ({ data, backtestData = [], visibleIndicators, markers
     // (1) 수익률 라인
     if (backtestData.length > 0) {
       const strategySeries = chart.addLineSeries({
-        color: '#fbbf24',
+        color: '#ffffff',
         lineWidth: 2,
         priceScaleId: 'left',
       });
@@ -92,7 +92,7 @@ export const StockChart = ({ data, backtestData = [], visibleIndicators, markers
     });
     candleSeries.setData(data as any);
 
-    // ✅ 마커 세팅 (데이터가 렌더링된 후 호출)
+    // 마커 세팅 (데이터가 렌더링된 후 호출)
     if (markers.length > 0) {
       candleSeries.setMarkers(markers);
     }
@@ -113,7 +113,7 @@ export const StockChart = ({ data, backtestData = [], visibleIndicators, markers
         chart.addLineSeries({
           color,
           lineWidth: 1,
-          lineStyle: LineStyle.Dashed,
+          lineStyle: LineStyle.Solid,
           priceScaleId: 'right',
         });
 
@@ -140,7 +140,7 @@ export const StockChart = ({ data, backtestData = [], visibleIndicators, markers
       );
     }
 
-    // ✅ --- 4. 하단 지표 스택 (RSI & MACD) 로직 수정 ---
+    // 하단 지표 (RSI & MACD) 로직
 
     let currentPaneIndex = 0; // 지표 순서 (아래에서부터 0, 1...)
 

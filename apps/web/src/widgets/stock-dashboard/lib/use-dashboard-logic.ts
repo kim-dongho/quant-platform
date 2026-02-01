@@ -66,7 +66,7 @@ export const useDashboardLogic = () => {
 
   return {
     mergedData,
-    markers, // ✅ 외부로 리턴
+    markers,
     backtestLine: backtestQuery.data?.results || [],
     companyName: historyQuery.data?.company_name || symbol,
     isLoading: historyQuery.isLoading || backtestQuery.isLoading,
