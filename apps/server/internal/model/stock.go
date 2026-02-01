@@ -11,12 +11,20 @@ type StockHistoryResponse struct {
 // MarketData 일자별 시세 데이터
 // @Description 개별 일자의 시가, 고가, 저가, 종가 및 거래량 정보
 type MarketData struct {
-	Time   string  `json:"time" example:"2024-01-25"`
+	Time   string  `json:"time" gorm:"column:time" example:"2026-02-01"`
 	Open   float64 `json:"open" example:"150.25"`
-	High   float64 `json:"high" example:"155.00"`
-	Low    float64 `json:"low" example:"149.50"`
+	High   float64 `json:"high" example:"155.80"`
+	Low    float64 `json:"low" example:"149.10"`
 	Close  float64 `json:"close" example:"153.40"`
-	Volume int64   `json:"volume" example:"1200000"`
+	Volume float64 `json:"volume" example:"1200500"`
+
+	// 보조지표 필드
+	RSI   *float64 `json:"rsi,omitempty" example:"55.42"`
+	MACD  *float64 `json:"macd,omitempty" example:"1.25"`
+	MACDH *float64 `json:"macd_h,omitempty" example:"0.45"`
+	BBU   *float64 `json:"bb_u,omitempty" example:"160.20"`
+	BBM   *float64 `json:"bb_m,omitempty" example:"150.00"`
+	BBL   *float64 `json:"bb_l,omitempty" example:"139.80"`
 }
 
 func (MarketData) TableName() string {
