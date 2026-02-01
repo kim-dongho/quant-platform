@@ -6,11 +6,13 @@ import { TradeForm } from '@/features/trade-stock/ui/trade-form';
 import { StockChart } from '@/entities/stock/ui/stock-chart';
 
 import { useDashboardLogic } from '../lib/use-dashboard-logic';
+import { useDashboardUrlSync } from '../lib/use-url-sync';
 import { useDashboardStore } from '../model/dashborad-store';
 import { PerformanceCard } from './performence-card';
 import { DashboardHeader } from './stock-dashboard-header';
 
 export const StockDashboardWidget = () => {
+  useDashboardUrlSync();
   // UI 상태
   const { symbol, setSymbol, indicators, toggleIndicator, strategyParams, setStrategyParam } =
     useDashboardStore();
