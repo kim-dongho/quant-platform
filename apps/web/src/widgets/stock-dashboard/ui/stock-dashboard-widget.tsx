@@ -16,7 +16,7 @@ export const StockDashboardWidget = () => {
     useDashboardStore();
 
   // 데이터 로직
-  const { mergedData, backtestLine, companyName, currentPrice, isLoading, refetch } =
+  const { mergedData, backtestLine, companyName, markers, currentPrice, isLoading, refetch } =
     useDashboardLogic();
 
   return (
@@ -47,6 +47,7 @@ export const StockDashboardWidget = () => {
             data={mergedData}
             backtestData={backtestLine}
             visibleIndicators={indicators}
+            markers={markers}
           />
         ) : (
           !isLoading && (

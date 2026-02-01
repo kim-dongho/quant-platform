@@ -17,8 +17,7 @@ def save_to_db(ticker: str):
         # 1. Ticker 객체 생성 및 메타데이터 추출
         t = yf.Ticker(ticker)
         
-        # ✅ 회사 이름 추출 (longName -> shortName -> ticker 순서)
-        # 이 과정에서 실명이 DB의 stocks.name에 들어갑니다.
+        # 회사 이름 추출 (longName -> shortName -> ticker 순서)
         company_name = t.info.get('longName') or t.info.get('shortName') or ticker
         print(f"🏢 Company: {company_name}")
 

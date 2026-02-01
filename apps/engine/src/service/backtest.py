@@ -67,31 +67,44 @@ def calculate_strategy(ticker: str, params: dict):
 
     df['position'] = signals
 
+    # 포지션 변화(Diff)를 통해 매매 신호 감지
+    # 1.0 = 매수 (0 -> 1), -1.0 = 매도 (1 -> 0), 0 = 유지
+    df['trade_signal'] = df['position'].diff()
+
     # 4. 수익률 계산
     df['pct_change'] = df['close'].pct_change().shift(-1)
     df['strategy_return'] = df['pct_change'] * df['position']
     df['cum_ret'] = (1 + df['strategy_return'].fillna(0)).cumprod()
 
-    # 5. 데이터 정제 (중복 제거 및 포맷팅)
+    # 5. 데이터 정제
     df['time_str'] = df['time'].dt.strftime('%Y-%m-%d')
     df_clean = df.drop_duplicates(subset=['time_str'], keep='last').copy()
-    df_clean = df_clean.dropna(subset=['cum_ret'])
+    
+    # NaN이 있더라도 trade_signal은 유지해야 마커가 찍힘 (필요 시 dropna 조정)
+    # df_clean = df_clean.dropna(subset=['cum_ret']) 
 
-    # 
-
-    # 6. 결과 패킹 (프론트엔드 Stack 구조를 위한 데이터 포함)
+    # 6. 결과 패킹
     results = []
     for _, row in df_clean.iterrows():
+        # action 필드 결정 로직
+        action = None
+        if row['trade_signal'] == 1.0:
+            action = 'buy'
+        elif row['trade_signal'] == -1.0:
+            action = 'sell'
+
         item = {
             "time": row['time_str'],
-            "value": round(float(row['cum_ret']), 4),
-            # 보조지표 데이터 추가 (null 체크 포함)
+            "value": round(float(row['cum_ret']), 4) if not pd.isna(row['cum_ret']) else 1.0,
+            
             "rsi": round(float(row['rsi']), 2) if not pd.isna(row['rsi']) else None,
             "macd": round(float(row['macd']), 2) if not pd.isna(row['macd']) else None,
             "macd_h": round(float(row['macd_h']), 2) if not pd.isna(row['macd_h']) else None,
             "bb_u": round(float(row['bb_u']), 2) if not pd.isna(row['bb_u']) else None,
             "bb_m": round(float(row['bb_m']), 2) if not pd.isna(row['bb_m']) else None,
             "bb_l": round(float(row['bb_l']), 2) if not pd.isna(row['bb_l']) else None,
+
+            "action": action 
         }
         results.append(item)
 

@@ -10,9 +10,10 @@ interface Props {
   data: MarketData[];
   backtestData?: { time: string; value: number }[];
   visibleIndicators: ChartOptions;
+  markers?: SeriesMarker<string>[];
 }
 
-export const StockChart = ({ data, backtestData = [], visibleIndicators }: Props) => {
+export const StockChart = ({ data, backtestData = [], visibleIndicators, markers = [] }: Props) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
 
@@ -91,6 +92,11 @@ export const StockChart = ({ data, backtestData = [], visibleIndicators }: Props
     });
     candleSeries.setData(data as any);
 
+    // ✅ 마커 세팅 (데이터가 렌더링된 후 호출)
+    if (markers.length > 0) {
+      candleSeries.setMarkers(markers);
+    }
+
     // (3) 이동평균선 (SMA)
     if (visibleIndicators.sma && data[0]?.sma) {
       const smaSeries = chart.addLineSeries({
@@ -110,19 +116,23 @@ export const StockChart = ({ data, backtestData = [], visibleIndicators }: Props
           lineStyle: LineStyle.Dashed,
           priceScaleId: 'right',
         });
+
       const u = createBB('#3b82f6'),
         m = createBB('#6366f1'),
         l = createBB('#3b82f6');
+
       u.setData(
         data
           .filter((d) => typeof d.bb_u === 'number')
           .map((d) => ({ time: d.time, value: d.bb_u! })),
       );
+
       m.setData(
         data
           .filter((d) => typeof d.bb_m === 'number')
           .map((d) => ({ time: d.time, value: d.bb_m! })),
       );
+
       l.setData(
         data
           .filter((d) => typeof d.bb_l === 'number')
@@ -217,7 +227,7 @@ export const StockChart = ({ data, backtestData = [], visibleIndicators }: Props
       window.removeEventListener('resize', handleResize);
       chart.remove();
     };
-  }, [data, backtestData, visibleIndicators]);
+  }, [data, backtestData, visibleIndicators, markers]);
 
   return <div ref={chartContainerRef} className="h-full w-full" />;
 };
