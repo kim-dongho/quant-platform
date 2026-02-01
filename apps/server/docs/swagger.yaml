@@ -5,24 +5,43 @@ definitions:
   quant-server_internal_model.MarketData:
     description: 개별 일자의 시가, 고가, 저가, 종가 및 거래량 정보
     properties:
+      bb_l:
+        example: 139.8
+        type: number
+      bb_m:
+        example: 150
+        type: number
+      bb_u:
+        example: 160.2
+        type: number
       close:
         example: 153.4
         type: number
       high:
-        example: 155
+        example: 155.8
         type: number
       low:
-        example: 149.5
+        example: 149.1
+        type: number
+      macd:
+        example: 1.25
+        type: number
+      macd_h:
+        example: 0.45
         type: number
       open:
         example: 150.25
         type: number
+      rsi:
+        description: 보조지표 필드
+        example: 55.42
+        type: number
       time:
-        example: "2024-01-25"
+        example: "2026-02-01"
         type: string
       volume:
-        example: 1200000
-        type: integer
+        example: 1200500
+        type: number
     type: object
   quant-server_internal_model.StockHistoryResponse:
     description: 주식의 기본 정보와 과거 시세 데이터를 포함합니다.
@@ -87,7 +106,7 @@ paths:
     get:
       consumes:
       - application/json
-      description: 특정 심볼의 회사명과 과거 시세 데이터를 조회합니다.
+      description: 특정 심볼의 회사명과 과거 시세 데이터를 조회합니다. (없으면 자동 수집)
       parameters:
       - description: Stock Symbol (e.g., NVDA)
         in: path

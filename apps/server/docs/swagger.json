@@ -64,7 +64,7 @@
         },
         "/stocks/{symbol}/history": {
             "get": {
-                "description": "특정 심볼의 회사명과 과거 시세 데이터를 조회합니다.",
+                "description": "특정 심볼의 회사명과 과거 시세 데이터를 조회합니다. (없으면 자동 수집)",
                 "consumes": [
                     "application/json"
                 ],
@@ -121,29 +121,54 @@
             "description": "개별 일자의 시가, 고가, 저가, 종가 및 거래량 정보",
             "type": "object",
             "properties": {
+                "bb_l": {
+                    "type": "number",
+                    "example": 139.8
+                },
+                "bb_m": {
+                    "type": "number",
+                    "example": 150
+                },
+                "bb_u": {
+                    "type": "number",
+                    "example": 160.2
+                },
                 "close": {
                     "type": "number",
                     "example": 153.4
                 },
                 "high": {
                     "type": "number",
-                    "example": 155
+                    "example": 155.8
                 },
                 "low": {
                     "type": "number",
-                    "example": 149.5
+                    "example": 149.1
+                },
+                "macd": {
+                    "type": "number",
+                    "example": 1.25
+                },
+                "macd_h": {
+                    "type": "number",
+                    "example": 0.45
                 },
                 "open": {
                     "type": "number",
                     "example": 150.25
                 },
+                "rsi": {
+                    "description": "보조지표 필드",
+                    "type": "number",
+                    "example": 55.42
+                },
                 "time": {
                     "type": "string",
-                    "example": "2024-01-25"
+                    "example": "2026-02-01"
                 },
                 "volume": {
-                    "type": "integer",
-                    "example": 1200000
+                    "type": "number",
+                    "example": 1200500
                 }
             }
         },
