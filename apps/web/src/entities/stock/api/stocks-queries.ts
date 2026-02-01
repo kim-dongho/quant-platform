@@ -1,0 +1,26 @@
+import { useQuery } from '@tanstack/react-query';
+
+import { getBacktestResult, getStockHistory } from './stocks-api';
+
+// 시세 데이터 쿼리
+export const useStockHistoryQuery = (symbol: string) => {
+  return useQuery({
+    queryKey: ['stockHistory', symbol],
+    queryFn: async () => {
+      const res = await getStockHistory(symbol);
+      return 'data' in res ? res : { company_name: symbol, data: res as any };
+    },
+    staleTime: 1000 * 60 * 5,
+    enabled: !!symbol,
+  });
+};
+
+// 백테스트 쿼리
+export const useBacktestQuery = (symbol: string, params: any) => {
+  return useQuery({
+    queryKey: ['backtest', symbol, params],
+    queryFn: () => getBacktestResult(symbol, params),
+    staleTime: 1000 * 60 * 1,
+    enabled: !!symbol,
+  });
+};
