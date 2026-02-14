@@ -1,6 +1,10 @@
 import { apiClient } from '@/shared/api/client';
 
-import { getBacktestResultResponseDto, getStockHistoryResponseDto } from '../model/stocks-dto';
+import {
+  GetStockListResponseDto,
+  getBacktestResultResponseDto,
+  getStockHistoryResponseDto,
+} from '../model/stocks-dto';
 
 /**
  * 주식 시세 히스토리 조회
@@ -8,6 +12,14 @@ import { getBacktestResultResponseDto, getStockHistoryResponseDto } from '../mod
 export const getStockHistory = async (symbol: string): Promise<getStockHistoryResponseDto> => {
   const { data } = await apiClient.get<getStockHistoryResponseDto>(`/stocks/${symbol}/history`);
 
+  return data;
+};
+
+/**
+ * 종목 리스트 조회
+ */
+export const getStockList = async (): Promise<GetStockListResponseDto> => {
+  const { data } = await apiClient.get<GetStockListResponseDto>(`/stocks/list`);
   return data;
 };
 

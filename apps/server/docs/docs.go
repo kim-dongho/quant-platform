@@ -68,6 +68,38 @@ const docTemplate = `{
                 }
             }
         },
+        "/stocks/list": {
+            "get": {
+                "description": "DB에 저장된 중복 없는 종목 심볼 목록을 조회합니다. 검색창의 자동완성(Autocomplete) 기능에 사용됩니다.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "stocks"
+                ],
+                "summary": "종목 리스트 조회 (자동완성용)",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/internal_controller.StockItem"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/stocks/{symbol}/history": {
             "get": {
                 "description": "특정 심볼의 회사명과 과거 시세 데이터를 조회합니다. (없으면 자동 수집)",
@@ -114,12 +146,30 @@ const docTemplate = `{
                                 "type": "string"
                             }
                         }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
                     }
                 }
             }
         }
     },
     "definitions": {
+        "internal_controller.StockItem": {
+            "type": "object",
+            "properties": {
+                "symbol": {
+                    "type": "string",
+                    "example": "NVDA"
+                }
+            }
+        },
         "quant-server_internal_model.BacktestRequest": {
             "type": "object"
         },

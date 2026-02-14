@@ -30,3 +30,7 @@ export interface BacktestResultPoint {
   time: string;
   value: number; // Equity
 }
+
+export interface StockItem {
+  symbol: string;
+}

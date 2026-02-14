@@ -1,5 +1,11 @@
 basePath: /api
 definitions:
+  internal_controller.StockItem:
+    properties:
+      symbol:
+        example: NVDA
+        type: string
+    type: object
   quant-server_internal_model.BacktestRequest:
     type: object
   quant-server_internal_model.MarketData:
@@ -132,7 +138,34 @@ paths:
             additionalProperties:
               type: string
             type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
       summary: 주식 히스토리 조회
+      tags:
+      - stocks
+  /stocks/list:
+    get:
+      description: DB에 저장된 중복 없는 종목 심볼 목록을 조회합니다. 검색창의 자동완성(Autocomplete) 기능에 사용됩니다.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/internal_controller.StockItem'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: 종목 리스트 조회 (자동완성용)
       tags:
       - stocks
 swagger: "2.0"

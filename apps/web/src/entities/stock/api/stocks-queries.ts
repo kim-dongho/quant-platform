@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 
-import { getBacktestResult, getStockHistory } from './stocks-api';
+import { getBacktestResult, getStockHistory, getStockList } from './stocks-api';
 
 // 시세 데이터 쿼리
 export const useStockHistoryQuery = (symbol: string) => {
@@ -23,5 +23,14 @@ export const useBacktestQuery = (symbol: string, params: any, enabled: boolean =
     queryFn: () => getBacktestResult(symbol, params),
     staleTime: 1000 * 60 * 1,
     enabled: !!symbol && enabled,
+  });
+};
+
+// 주식 리스트 조회 쿼리
+export const useStockListQuery = () => {
+  return useQuery({
+    queryKey: ['stockList'],
+    queryFn: getStockList,
+    staleTime: 1000 * 60 * 60,
   });
 };

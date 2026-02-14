@@ -12,7 +12,7 @@ import (
 // Python 엔진에 데이터 수집 요청을 보내는 헬퍼 함수
 func triggerIngestion(symbol string) error {
 	url := fmt.Sprintf("http://engine:8000/ingest/%s", symbol)
-	
+
 	resp, err := http.Post(url, "application/json", nil)
 	if err != nil {
 		return fmt.Errorf("engine connection failed: %v", err)
@@ -35,6 +35,7 @@ func triggerIngestion(symbol string) error {
 // @Success      200      {object}  model.StockHistoryResponse
 // @Failure      400      {object}  map[string]string
 // @Failure      404      {object}  map[string]string
+// @Failure      500      {object}  map[string]string
 // @Router       /stocks/{symbol}/history [get]
 func GetStockHistory(c *fiber.Ctx) error {
 	symbol := c.Params("symbol")
@@ -46,7 +47,7 @@ func GetStockHistory(c *fiber.Ctx) error {
 
 	// 시세 데이터 DB 조회
 	var history []model.MarketData
-	
+
 	// 쿼리문 정의 (재사용을 위해 변수에 할당하는 방식도 가능하지만, 직관적으로 반복 작성함)
 	db.Table("market_data").
 		Select("DISTINCT ON (time) TO_CHAR(time, 'YYYY-MM-DD') as time, open, high, low, close, volume").
@@ -63,7 +64,7 @@ func GetStockHistory(c *fiber.Ctx) error {
 			fmt.Printf("❌ Ingestion failed: %v\n", err)
 			// 수집도 실패하면 진짜 없는 종목임
 			return c.Status(404).JSON(fiber.Map{
-				"error": "Symbol not found or data unavailable",
+				"error":   "Symbol not found or data unavailable",
 				"details": err.Error(),
 			})
 		}
@@ -74,7 +75,7 @@ func GetStockHistory(c *fiber.Ctx) error {
 			Where("symbol = ?", symbol).
 			Order("time ASC").
 			Find(&history)
-		
+
 		if len(history) == 0 {
 			// 저장했다고 했는데 조회 안되면 시스템 에러
 			return c.Status(500).JSON(fiber.Map{"error": "Data ingested but retrieval failed"})
@@ -95,5 +96,44 @@ func GetStockHistory(c *fiber.Ctx) error {
 		Data:        history,
 	}
 
+	return c.JSON(response)
+}
+
+type StockItem struct {
+	Symbol string `json:"symbol" example:"NVDA"`
+}
+
+// GetStockList godoc
+// @Summary      종목 리스트 조회 (자동완성용)
+// @Description  DB에 저장된 중복 없는 종목 심볼 목록을 조회합니다. 검색창의 자동완성(Autocomplete) 기능에 사용됩니다.
+// @Tags         stocks
+// @Produce      json
+// @Success      200  {array}   StockItem
+// @Failure      500  {object}  map[string]string
+// @Router       /stocks/list [get]
+func GetStockList(c *fiber.Ctx) error {
+	// 1. 중복 제거된 종목 심볼 가져오기
+	var symbols []string
+
+	// GORM 예시: market_data 테이블에서 symbol 컬럼만 distinct로 가져옴
+	result := database.DB.Table("market_data").
+		Select("DISTINCT symbol").
+		Order("symbol ASC").
+		Pluck("symbol", &symbols).
+		Error
+
+	if result != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"error": "Failed to fetch stock list",
+		})
+	}
+
+	// 2. 프론트엔드 포맷에 맞게 변환 (Array of Objects)
+	response := make([]StockItem, len(symbols))
+	for i, s := range symbols {
+		response[i] = StockItem{Symbol: s}
+	}
+
+	// 3. JSON 응답
 	return c.JSON(response)
 }

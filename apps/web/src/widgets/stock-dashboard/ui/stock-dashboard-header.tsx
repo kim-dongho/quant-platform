@@ -22,6 +22,6 @@ export const DashboardHeader = ({ companyName, symbol, onSearch }: Props) => (
         </span>
       </div>
     </div>
-    <StockSearch onSearch={onSearch} />
+    <StockSearch onSearch={onSearch} currentSymbol={symbol} />
   </div>
 );

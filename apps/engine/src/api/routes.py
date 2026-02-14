@@ -42,3 +42,26 @@ def ingest_data_api(ticker: str):
         # 기타 서버 에러
         print(f"❌ Ingestion failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/stocks/list")
+def get_stock_list():
+    """
+    DB에 저장된 모든 종목의 티커와 이름을 가져옵니다.
+    중복을 제거하고(DISTINCT), 티커 순으로 정렬합니다.
+    """
+    # market_data 테이블에서 symbol만 가져오거나, 
+    # 별도의 company_info 테이블이 있다면 거기서 가져오는 것이 더 효율적입니다.
+    # 여기서는 market_data에서 유니크한 값을 뽑는 예시입니다.
+    query = """
+        SELECT DISTINCT symbol 
+        FROM market_data 
+        ORDER BY symbol ASC
+    """
+    try:
+        df = pd.read_sql(query, engine)
+        # 프론트엔드에서 쓰기 편하게 리스트 형태로 변환
+        # 예: [{'symbol': 'AAPL'}, {'symbol': 'NVDA'}, ...]
+        return df.to_dict(orient="records")
+    except Exception as e:
+        return {"error": str(e)}
