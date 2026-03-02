@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-import pandas_ta as ta
+import pandas_ta_classic as ta
 from src.core.database import engine
 
 def calculate_strategy(ticker: str, params: dict):

@@ -2,10 +2,12 @@ import uvicorn
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 import threading
+import time
 
 # 모듈 가져오기
 from src.core.config import TARGET_TICKERS
 from src.service.ingest import save_to_db
+from src.service.ingest_1m import save_1m_to_db
 from src.api.routes import router
 from src.core.database import init_db
 
@@ -15,8 +17,11 @@ def run_initial_ingestion():
     init_db() # 테이블 생성
     
     for ticker in TARGET_TICKERS:
-        save_to_db(ticker)
+        save_to_db(ticker)    # 일봉 데이터 수집
+        save_1m_to_db(ticker) # 1분봉 데이터 수집
         
+        time.sleep(1.5)
+
     print("✅ [Startup] Ingestion Completed. Ready to serve!")
 
 @asynccontextmanager

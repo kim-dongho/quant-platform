@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from src.service.backtest import calculate_strategy
 from src.service.ingest import save_to_db
+from src.service.ingest_1m import save_1m_to_db
 from typing import Dict, Any, Optional
 
 router = APIRouter()
@@ -43,6 +44,14 @@ def ingest_data_api(ticker: str):
         print(f"❌ Ingestion failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@router.post("/ingest_1m/{ticker}")
+def ingest_1m_data(ticker: str):
+    try:
+        save_1m_to_db(ticker)
+        return {"status": "success", "message": f"1m data for {ticker} saved"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 @router.get("/stocks/list")
 def get_stock_list():
