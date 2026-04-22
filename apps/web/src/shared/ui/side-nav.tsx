@@ -1,5 +1,7 @@
 'use client';
 
+import Image from 'next/image';
+
 import type { DashboardMode } from '@/widgets/stock-dashboard/lib/use-dashboard-logic';
 
 interface NavItem {
@@ -30,13 +32,11 @@ export const SideNav = ({
 }: Props) => {
   return (
     <aside className="fixed top-0 left-0 z-50 hidden h-full w-60 flex-col border-r border-slate-200 bg-slate-50 pt-4 md:flex">
-      <div className="mt-2 mb-8 px-6">
-        <h1 className="mb-1 text-lg font-black tracking-tight text-blue-700 uppercase">
+      <div className="mt-2 mb-8 flex items-center justify-center gap-4 px-4">
+        <Image src="/assets/logo.png" alt="Quant Platform" width={36} height={36} priority />
+        <h1 className="text-lg font-black tracking-tight text-blue-700 uppercase">
           Quant Platform
         </h1>
-        <p className="text-[10px] tracking-normal text-slate-500">
-          Active Strategy: {activeStrategy}
-        </p>
       </div>
 
       <nav className="flex flex-1 flex-col">
@@ -68,12 +68,12 @@ export const SideNav = ({
 
       <div className="mt-auto border-t border-slate-200 p-4">
         <div className="flex cursor-pointer items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-surface-variant font-bold text-primary">
+          <div className="bg-surface-variant text-primary flex h-8 w-8 items-center justify-center overflow-hidden rounded-full font-bold">
             {userName.slice(0, 1)}
           </div>
           <div className="flex flex-col">
-            <span className="text-xs font-semibold text-on-surface">{userName}</span>
-            <span className="text-[10px] text-on-surface-variant">{userTier}</span>
+            <span className="text-on-surface text-xs font-semibold">{userName}</span>
+            <span className="text-on-surface-variant text-[10px]">{userTier}</span>
           </div>
         </div>
       </div>

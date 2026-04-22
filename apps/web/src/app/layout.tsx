@@ -14,8 +14,11 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: 'Pro Terminal · Quant Platform',
+  title: 'Quant Platform',
   description: 'Precision trading terminal for quant strategies',
+  icons: {
+    icon: [{ url: '/assets/logo.svg', type: 'image/svg+xml' }],
+  },
 };
 
 export default function RootLayout({
