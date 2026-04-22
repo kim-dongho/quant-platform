@@ -1,31 +1,28 @@
 'use client';
 
 import Image from 'next/image';
-
-import type { DashboardMode } from '@/widgets/stock-dashboard/lib/use-dashboard-logic';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 
 interface NavItem {
-  id: DashboardMode;
+  href: string;
   label: string;
   icon: string;
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { id: 'backtest', label: 'Backtest', icon: 'history_edu' },
-  { id: 'trade', label: 'Trade', icon: 'bolt' },
+  { href: '/backtest', label: 'Backtest', icon: 'history_edu' },
+  { href: '/portfolio', label: 'Portfolio', icon: 'pie_chart' },
+  { href: '/trade', label: 'Trade', icon: 'bolt' },
 ];
 
-interface Props {
-  activeMode: DashboardMode;
-  onModeChange: (mode: DashboardMode) => void;
-  activeStrategy?: string;
-}
+export const SideNav = () => {
+  const pathname = usePathname() ?? '';
 
-export const SideNav = ({ activeMode, onModeChange, activeStrategy = 'RSI-Cross' }: Props) => {
   return (
     <aside className="fixed top-0 left-0 z-50 hidden h-full w-60 flex-col border-r border-slate-200 bg-slate-50 pt-4 md:flex">
       <div className="mt-2 mb-8 flex items-center justify-center gap-4 px-4">
-        <Image src="/assets/logo.png" alt="Quant Platform" width={36} height={36} priority />
+        <Image src="/assets/logo.svg" alt="Quant Platform" width={36} height={36} priority />
         <h1 className="text-lg font-black tracking-tight text-blue-700 uppercase">
           Quant Platform
         </h1>
@@ -33,12 +30,11 @@ export const SideNav = ({ activeMode, onModeChange, activeStrategy = 'RSI-Cross'
 
       <nav className="flex flex-1 flex-col">
         {NAV_ITEMS.map((item) => {
-          const isActive = item.id === activeMode;
+          const isActive = pathname.startsWith(item.href);
           return (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => onModeChange(item.id)}
+            <Link
+              key={item.href}
+              href={item.href}
               className={[
                 'm-2 flex items-center gap-3 rounded-lg px-4 py-3 text-left text-xs font-semibold tracking-wider uppercase transition-colors',
                 isActive
@@ -53,7 +49,7 @@ export const SideNav = ({ activeMode, onModeChange, activeStrategy = 'RSI-Cross'
                 {item.icon}
               </span>
               {item.label}
-            </button>
+            </Link>
           );
         })}
       </nav>

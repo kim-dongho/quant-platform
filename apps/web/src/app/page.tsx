@@ -1,5 +1,5 @@
-import { HomePage } from "@/pages/home/ui/page";
+import { redirect } from 'next/navigation';
 
 export default function Page() {
-  return <HomePage />;
+  redirect('/backtest');
 }
