@@ -2,7 +2,14 @@
 
 import { useEffect, useRef } from 'react';
 
-import { ColorType, IChartApi, LineStyle, SeriesMarker, createChart } from 'lightweight-charts';
+import {
+  ColorType,
+  IChartApi,
+  LineStyle,
+  SeriesMarker,
+  Time,
+  createChart,
+} from 'lightweight-charts';
 
 import { ChartOptions, MarketData } from '../model/stocks-common';
 
@@ -33,17 +40,18 @@ export const StockChart = ({ data, backtestData = [], visibleIndicators, markers
     // 2. 차트 생성
     const chart = createChart(chartContainerRef.current, {
       layout: {
-        background: { type: ColorType.Solid, color: '#0f172a' },
-        textColor: '#94a3b8',
+        background: { type: ColorType.Solid, color: '#ffffff' },
+        textColor: '#434655',
+        fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif',
       },
-      grid: { vertLines: { color: '#1e293b' }, horzLines: { color: '#1e293b' } },
+      grid: { vertLines: { color: '#eef2ff' }, horzLines: { color: '#eef2ff' } },
       width: chartContainerRef.current.clientWidth,
-      height: 600,
+      height: chartContainerRef.current.clientHeight || 600,
 
       // 메인 차트 (캔들) 영역 설정
       rightPriceScale: {
         visible: true,
-        borderColor: '#334155',
+        borderColor: '#c3c6d7',
         scaleMargins: {
           top: 0.05,
           bottom: mainChartBottomMargin + 0.05, // 지표 영역만큼 비워둠 (+여유분)
@@ -52,29 +60,29 @@ export const StockChart = ({ data, backtestData = [], visibleIndicators, markers
       // 수익률 차트 (좌측) 영역 설정
       leftPriceScale: {
         visible: backtestData.length > 0,
-        borderColor: '#334155',
+        borderColor: '#c3c6d7',
         scaleMargins: {
           top: 0.05,
           bottom: mainChartBottomMargin + 0.05,
         },
       },
-      timeScale: { borderColor: '#334155', barSpacing: 10 },
+      timeScale: { borderColor: '#c3c6d7', barSpacing: 10 },
     });
     chartRef.current = chart;
 
     // --- 3. 시리즈 추가 ---
 
-    // (1) 수익률 라인
+    // (1) 수익률 라인 — 중립 다크 슬레이트 (green/red는 매매 신호 전용)
     if (backtestData.length > 0) {
       const strategySeries = chart.addLineSeries({
-        color: '#ffffff',
+        color: '#0b1c30',
         lineWidth: 2,
         priceScaleId: 'left',
       });
       strategySeries.setData(backtestData);
       strategySeries.createPriceLine({
         price: 1.0,
-        color: '#f43f5e',
+        color: '#94a3b8',
         lineStyle: LineStyle.Dashed,
         axisLabelVisible: true,
         title: 'Start',
@@ -83,11 +91,11 @@ export const StockChart = ({ data, backtestData = [], visibleIndicators, markers
 
     // (2) 캔들스틱
     const candleSeries = chart.addCandlestickSeries({
-      upColor: '#22c55e',
-      downColor: '#ef4444',
+      upColor: '#006c49',
+      downColor: '#ba1a1a',
       borderVisible: false,
-      wickUpColor: '#22c55e',
-      wickDownColor: '#ef4444',
+      wickUpColor: '#006c49',
+      wickDownColor: '#ba1a1a',
       priceScaleId: 'right',
     });
     candleSeries.setData(data as any);
@@ -97,12 +105,11 @@ export const StockChart = ({ data, backtestData = [], visibleIndicators, markers
       candleSeries.setMarkers(markers);
     }
 
-    // (3) 이동평균선 (SMA)
+    // (3) 이동평균선 (SMA) — Short: blue, Long: amber (둘 다 non-semantic)
     if (visibleIndicators.sma) {
-      // 🟡 단기 이평선 (Short) - 노란색
       if (data.some((d) => typeof d.sma_s === 'number')) {
         const smaShortSeries = chart.addLineSeries({
-          color: '#fbbf24', // Yellow 400
+          color: '#2563eb',
           lineWidth: 2,
           priceScaleId: 'right',
           title: 'SMA Short',
@@ -110,14 +117,13 @@ export const StockChart = ({ data, backtestData = [], visibleIndicators, markers
         smaShortSeries.setData(
           data
             .filter((d) => typeof d.sma_s === 'number')
-            .map((d) => ({ time: d.time, value: d.sma_s! })),
+            .map((d) => ({ time: d.time as Time, value: d.sma_s! })),
         );
       }
 
-      // 🔵 장기 이평선 (Long) - 파란색
       if (data.some((d) => typeof d.sma_l === 'number')) {
         const smaLongSeries = chart.addLineSeries({
-          color: '#60a5fa', // Blue 400
+          color: '#f59e0b',
           lineWidth: 2,
           priceScaleId: 'right',
           title: 'SMA Long',
@@ -125,41 +131,41 @@ export const StockChart = ({ data, backtestData = [], visibleIndicators, markers
         smaLongSeries.setData(
           data
             .filter((d) => typeof d.sma_l === 'number')
-            .map((d) => ({ time: d.time, value: d.sma_l! })),
+            .map((d) => ({ time: d.time as Time, value: d.sma_l! })),
         );
       }
     }
 
-    // (4) 볼린저 밴드
+    // (4) 볼린저 밴드 — 옅은 슬레이트 밴드로 배경처럼 처리
     if (visibleIndicators.bollinger && data.some((d) => typeof d.bb_u === 'number')) {
-      const createBB = (color: string) =>
+      const createBB = (color: string, width: 1 | 2 = 1) =>
         chart.addLineSeries({
           color,
-          lineWidth: 1,
+          lineWidth: width,
           lineStyle: LineStyle.Solid,
           priceScaleId: 'right',
         });
 
-      const u = createBB('#3b82f6'),
-        m = createBB('#6366f1'),
-        l = createBB('#3b82f6');
+      const u = createBB('#94a3b8'),
+        m = createBB('#64748b', 2),
+        l = createBB('#94a3b8');
 
       u.setData(
         data
           .filter((d) => typeof d.bb_u === 'number')
-          .map((d) => ({ time: d.time, value: d.bb_u! })),
+          .map((d) => ({ time: d.time as Time, value: d.bb_u! })),
       );
 
       m.setData(
         data
           .filter((d) => typeof d.bb_m === 'number')
-          .map((d) => ({ time: d.time, value: d.bb_m! })),
+          .map((d) => ({ time: d.time as Time, value: d.bb_m! })),
       );
 
       l.setData(
         data
           .filter((d) => typeof d.bb_l === 'number')
-          .map((d) => ({ time: d.time, value: d.bb_l! })),
+          .map((d) => ({ time: d.time as Time, value: d.bb_l! })),
       );
     }
 
@@ -191,9 +197,10 @@ export const StockChart = ({ data, backtestData = [], visibleIndicators, markers
         data
           .filter((d) => typeof d.macd_h === 'number')
           .map((d) => ({
-            time: d.time,
+            time: d.time as Time,
             value: d.macd_h!,
-            color: d.macd_h! >= 0 ? '#10b981' : '#ef4444',
+            // 매매 신호(green/red)와 분리하기 위해 sky / orange 사용
+            color: d.macd_h! >= 0 ? '#0ea5e9' : '#f97316',
           })),
       );
 
@@ -203,8 +210,8 @@ export const StockChart = ({ data, backtestData = [], visibleIndicators, markers
     // RSI 그리기 (MACD 바로 위)
     if (visibleIndicators.rsi && data.some((d) => typeof d.rsi === 'number')) {
       const rsiSeries = chart.addLineSeries({
-        color: '#a855f7',
-        lineWidth: 1,
+        color: '#8b5cf6',
+        lineWidth: 2,
         priceScaleId: 'rsi',
         title: 'RSI',
       });
@@ -222,17 +229,19 @@ export const StockChart = ({ data, backtestData = [], visibleIndicators, markers
       });
 
       rsiSeries.setData(
-        data.filter((d) => typeof d.rsi === 'number').map((d) => ({ time: d.time, value: d.rsi! })),
+        data
+          .filter((d) => typeof d.rsi === 'number')
+          .map((d) => ({ time: d.time as Time, value: d.rsi! })),
       );
       rsiSeries.createPriceLine({
         price: 70,
-        color: '#475569',
+        color: '#c3c6d7',
         lineStyle: LineStyle.Dashed,
         axisLabelVisible: true,
       });
       rsiSeries.createPriceLine({
         price: 30,
-        color: '#475569',
+        color: '#c3c6d7',
         lineStyle: LineStyle.Dashed,
         axisLabelVisible: true,
       });
@@ -240,13 +249,19 @@ export const StockChart = ({ data, backtestData = [], visibleIndicators, markers
       currentPaneIndex++;
     }
 
-    // 반응형
+    // 반응형: 컨테이너 크기 변화에 맞춰 width + height 모두 갱신
     const handleResize = () => {
-      if (chartContainerRef.current)
-        chart.applyOptions({ width: chartContainerRef.current.clientWidth });
+      if (!chartContainerRef.current) return;
+      chart.applyOptions({
+        width: chartContainerRef.current.clientWidth,
+        height: chartContainerRef.current.clientHeight,
+      });
     };
+    const ro = new ResizeObserver(handleResize);
+    ro.observe(chartContainerRef.current);
     window.addEventListener('resize', handleResize);
     return () => {
+      ro.disconnect();
       window.removeEventListener('resize', handleResize);
       chart.remove();
     };
