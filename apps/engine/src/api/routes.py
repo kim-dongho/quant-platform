@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from src.service.backtest import calculate_strategy
 from src.service.ingest import save_to_db
 from src.service.ingest_1m import save_1m_to_db
+from src.service.market_calendar import get_last_session_date
 from typing import Dict, Any, Optional
 
 router = APIRouter()
@@ -52,6 +53,18 @@ def ingest_1m_data(ticker: str):
         return {"status": "success", "message": f"1m data for {ticker} saved"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+@router.get("/market/last_session")
+def get_last_session(market: str = "NASDAQ"):
+    """
+    가장 최근에 마감된 거래 세션 날짜를 반환.
+    Go 서버가 DB 데이터의 stale 여부를 판단할 때 사용.
+    """
+    try:
+        return {"market": market, "date": get_last_session_date(market)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/stocks/list")
 def get_stock_list():

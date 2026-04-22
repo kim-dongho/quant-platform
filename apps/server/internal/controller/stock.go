@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"quant-server/internal/database"
@@ -23,6 +24,27 @@ func triggerIngestion(symbol string) error {
 		return fmt.Errorf("engine returned status: %d", resp.StatusCode)
 	}
 	return nil
+}
+
+// 엔진에서 NASDAQ 기준 가장 최근 마감 세션 날짜(YYYY-MM-DD)를 조회
+func getLastTradingDay() (string, error) {
+	resp, err := http.Get("http://engine:8000/market/last_session")
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return "", fmt.Errorf("engine returned status: %d", resp.StatusCode)
+	}
+
+	var body struct {
+		Date string `json:"date"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		return "", err
+	}
+	return body.Date, nil
 }
 
 // GetStockHistory godoc
@@ -79,6 +101,23 @@ func GetStockHistory(c *fiber.Ctx) error {
 		if len(history) == 0 {
 			// 저장했다고 했는데 조회 안되면 시스템 에러
 			return c.Status(500).JSON(fiber.Map{"error": "Data ingested but retrieval failed"})
+		}
+	} else {
+		// 데이터는 있는데 최신 bar가 마지막 마감 세션보다 오래됐으면 백필
+		lastBar := history[len(history)-1].Time
+		if lastSession, err := getLastTradingDay(); err == nil && lastBar < lastSession {
+			fmt.Printf("🔄 Data stale for %s (last bar: %s, last session: %s). Refreshing...\n", symbol, lastBar, lastSession)
+			if ingestErr := triggerIngestion(symbol); ingestErr != nil {
+				// 백필 실패해도 기존 데이터는 반환
+				fmt.Printf("⚠️ Backfill failed, returning stale data: %v\n", ingestErr)
+			} else {
+				history = history[:0]
+				db.Table("market_data").
+					Select("DISTINCT ON (time) TO_CHAR(time, 'YYYY-MM-DD') as time, open, high, low, close, volume").
+					Where("symbol = ?", symbol).
+					Order("time ASC").
+					Find(&history)
+			}
 		}
 	}
 

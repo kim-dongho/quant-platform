@@ -4,6 +4,7 @@ SQLAlchemy
 psycopg2-binary
 pandas
 pandas-ta-classic
+pandas-market-calendars
 yfinance
 requests
 python-dateutil
