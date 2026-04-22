@@ -5,29 +5,63 @@ interface Props {
   onChange: (key: keyof ChartOptions) => void;
 }
 
+const LABELS: Record<keyof ChartOptions, string> = {
+  volume: 'Volume',
+  rsi: 'RSI',
+  macd: 'MACD',
+  sma: 'SMA (10, 50)',
+  bollinger: 'Bollinger',
+};
+
 export const IndicatorSelector = ({ options, onChange }: Props) => {
   return (
-    <div className="flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-900 px-3 py-4 shadow-2xl">
-      <span className="text-xs font-bold tracking-wider text-slate-500 uppercase">
+    <div className="scrollbar-hide flex h-14 shrink-0 items-center gap-4 overflow-x-auto border-b border-outline-variant/30 bg-surface-container-lowest px-4">
+      <span className="mr-2 text-[11px] font-semibold tracking-wider whitespace-nowrap text-on-surface-variant uppercase">
         Visual Indicators
       </span>
-      <div className="flex flex-wrap gap-4">
-        {Object.entries(options).map(([key, value]) => (
+
+      {(Object.entries(options) as [keyof ChartOptions, boolean][]).map(([key, value]) => {
+        const label = LABELS[key] ?? key;
+        const isPrimaryActive = value && key === 'sma';
+
+        return (
           <label
             key={key}
-            className="group flex cursor-pointer items-center gap-2 rounded-md bg-slate-800/50 px-3 py-1.5 transition-colors hover:bg-slate-800"
+            className={[
+              'flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 whitespace-nowrap transition-colors',
+              isPrimaryActive
+                ? 'border-primary/20 bg-primary-container'
+                : 'border-outline-variant/50 bg-surface hover:bg-surface-container-low',
+            ].join(' ')}
           >
             <input
               type="checkbox"
               checked={value}
-              onChange={() => onChange(key as keyof ChartOptions)}
-              className="h-4 w-4 rounded border-slate-700 bg-slate-800 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-0"
+              onChange={() => onChange(key)}
+              className="h-3.5 w-3.5 rounded border-outline-variant bg-surface-container-lowest text-primary focus:ring-primary"
             />
-            <span className="text-xs font-bold text-slate-400 uppercase group-hover:text-slate-200">
-              {key}
+            <span
+              className={[
+                'text-xs font-medium',
+                isPrimaryActive ? 'text-on-primary-container' : 'text-on-surface',
+              ].join(' ')}
+            >
+              {label}
             </span>
           </label>
-        ))}
+        );
+      })}
+
+      <div className="ml-auto flex items-center gap-2 border-l border-outline-variant/30 pl-4">
+        <button className="flex h-8 w-8 items-center justify-center rounded text-on-surface-variant hover:bg-surface-container-low">
+          <span className="material-symbols-outlined text-[18px]">zoom_in</span>
+        </button>
+        <button className="flex h-8 w-8 items-center justify-center rounded text-on-surface-variant hover:bg-surface-container-low">
+          <span className="material-symbols-outlined text-[18px]">zoom_out</span>
+        </button>
+        <button className="flex h-8 w-8 items-center justify-center rounded text-on-surface-variant hover:bg-surface-container-low">
+          <span className="material-symbols-outlined text-[18px]">fullscreen</span>
+        </button>
       </div>
     </div>
   );
