@@ -19,17 +19,9 @@ interface Props {
   activeMode: DashboardMode;
   onModeChange: (mode: DashboardMode) => void;
   activeStrategy?: string;
-  userName?: string;
-  userTier?: string;
 }
 
-export const SideNav = ({
-  activeMode,
-  onModeChange,
-  activeStrategy = 'RSI-Cross',
-  userName = 'Trader John',
-  userTier = 'Pro Tier',
-}: Props) => {
+export const SideNav = ({ activeMode, onModeChange, activeStrategy = 'RSI-Cross' }: Props) => {
   return (
     <aside className="fixed top-0 left-0 z-50 hidden h-full w-60 flex-col border-r border-slate-200 bg-slate-50 pt-4 md:flex">
       <div className="mt-2 mb-8 flex items-center justify-center gap-4 px-4">
@@ -67,15 +59,14 @@ export const SideNav = ({
       </nav>
 
       <div className="mt-auto border-t border-slate-200 p-4">
-        <div className="flex cursor-pointer items-center gap-3">
-          <div className="bg-surface-variant text-primary flex h-8 w-8 items-center justify-center overflow-hidden rounded-full font-bold">
-            {userName.slice(0, 1)}
-          </div>
-          <div className="flex flex-col">
-            <span className="text-on-surface text-xs font-semibold">{userName}</span>
-            <span className="text-on-surface-variant text-[10px]">{userTier}</span>
-          </div>
-        </div>
+        <a
+          href="https://github.com/kim-dongho/quant-platform"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-on-surface-variant hover:text-on-surface text-[11px] transition-colors"
+        >
+          © 2026 kim-dongho
+        </a>
       </div>
     </aside>
   );
