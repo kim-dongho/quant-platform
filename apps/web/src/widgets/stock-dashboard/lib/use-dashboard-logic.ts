@@ -67,13 +67,15 @@ export const useDashboardLogic = (mode: DashboardMode) => {
   // ----------------------------------------------------------------
   // 3. 데이터 병합 및 리턴 (모드별 분기)
   // ----------------------------------------------------------------
-  const { mergedData, markers, backtestLine } = useMemo(() => {
+  const { mergedData, markers, backtestLine, trades, winRate } = useMemo(() => {
     // (A) Trade Mode: 1분봉만 보여줌 (백테스트 라인 없음)
     if (mode === 'trade') {
       return {
         mergedData: tradeData,
         markers: [], // 필요하면 매매 타점 마커 추가 가능
         backtestLine: [], // 실전 매매에선 수익률 그래프 보통 안 봄
+        trades: 0,
+        winRate: 0,
       };
     }
 
@@ -81,8 +83,9 @@ export const useDashboardLogic = (mode: DashboardMode) => {
     const rawData = historyQuery.data?.data;
     const results = backtestQuery.data?.results;
 
-    if (!rawData) return { mergedData: [], markers: [], backtestLine: [] };
-    if (!results) return { mergedData: rawData, markers: [], backtestLine: [] };
+    if (!rawData) return { mergedData: [], markers: [], backtestLine: [], trades: 0, winRate: 0 };
+    if (!results)
+      return { mergedData: rawData, markers: [], backtestLine: [], trades: 0, winRate: 0 };
 
     const indicatorMap = new Map(results.map((item: any) => [item.time, item]));
     const generatedMarkers: SeriesMarker<string>[] = [];
@@ -116,15 +119,38 @@ export const useDashboardLogic = (mode: DashboardMode) => {
       };
     });
 
-    return { mergedData: merged, markers: generatedMarkers, backtestLine: results };
+    // 거래 횟수/승률 계산: buy → sell 페어 단위로, sell 시점 누적수익이
+    // buy 시점 누적수익보다 크면 승. 마지막 buy가 아직 청산 안 됐으면 제외.
+    let tradeCount = 0;
+    let winCount = 0;
+    let entryValue: number | null = null;
+    for (const r of results as any[]) {
+      if (r.action === 'buy') {
+        entryValue = r.value;
+      } else if (r.action === 'sell' && entryValue !== null) {
+        tradeCount++;
+        if (r.value > entryValue) winCount++;
+        entryValue = null;
+      }
+    }
+    const winRatePct = tradeCount > 0 ? Math.round((winCount / tradeCount) * 100) : 0;
+
+    return {
+      mergedData: merged,
+      markers: generatedMarkers,
+      backtestLine: results,
+      trades: tradeCount,
+      winRate: winRatePct,
+    };
   }, [mode, tradeData, historyQuery.data, backtestQuery.data]);
 
   return {
     mergedData,
     markers,
     backtestLine,
-    companyName:
-      mode === 'trade' ? `${symbol} (Live/1m)` : historyQuery.data?.company_name || symbol,
+    trades,
+    winRate,
+    companyName: mode === 'trade' ? symbol : historyQuery.data?.company_name || symbol,
     isLoading:
       mode === 'trade' ? isTradeLoading : historyQuery.isLoading || backtestQuery.isLoading,
     currentPrice: mergedData.length > 0 ? mergedData[mergedData.length - 1].close : 0,

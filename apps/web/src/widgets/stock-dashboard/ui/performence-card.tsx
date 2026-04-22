@@ -4,7 +4,7 @@ interface Props {
   trades?: number;
 }
 
-export const PerformanceCard = ({ data, winRate = 68, trades = 142 }: Props) => {
+export const PerformanceCard = ({ data, winRate = 0, trades = 0 }: Props) => {
   const lastValue = data.length > 0 ? data[data.length - 1].value : 1.0;
   const percentage = (lastValue - 1) * 100;
   const isPositive = percentage >= 0;
