@@ -26,8 +26,6 @@ export const StrategyInput = ({
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawValue = e.target.value;
     setLocalStr(rawValue);
-
-    // 빈 문자열이면 NaN 전달, 아니면 숫자 변환
     if (rawValue === '') {
       onChange(NaN);
     } else {
@@ -40,7 +38,9 @@ export const StrategyInput = ({
 
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-[10px] font-bold text-slate-500 uppercase">{label}</label>
+      <label className="text-[10px] font-semibold tracking-wider text-on-surface-variant uppercase">
+        {label}
+      </label>
       <input
         type="text"
         inputMode="decimal"
@@ -49,9 +49,13 @@ export const StrategyInput = ({
         onChange={handleChange}
         onFocus={(e) => e.target.select()}
         onKeyDown={(e) => e.key === 'Enter' && onEnter?.()}
-        className={`w-16 rounded bg-slate-800 px-2 py-1 text-sm text-white ring-1 transition-all focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 ${
-          isError ? 'ring-red-500 focus:ring-red-500' : 'ring-slate-700 focus:ring-emerald-500'
-        }`}
+        className={[
+          'w-full rounded-md border px-2 py-1.5 font-mono text-sm text-on-surface transition-all outline-none',
+          'bg-surface-container-lowest disabled:cursor-not-allowed disabled:opacity-50',
+          isError
+            ? 'border-error focus:border-error focus:ring-1 focus:ring-error'
+            : 'border-outline-variant/50 focus:border-primary focus:ring-1 focus:ring-primary',
+        ].join(' ')}
       />
     </div>
   );

@@ -1,21 +1,37 @@
 interface Props {
   data: { time: string; value: number }[];
+  winRate?: number;
+  trades?: number;
 }
 
-export const PerformanceCard = ({ data }: Props) => {
+export const PerformanceCard = ({ data, winRate = 68, trades = 142 }: Props) => {
   const lastValue = data.length > 0 ? data[data.length - 1].value : 1.0;
   const percentage = (lastValue - 1) * 100;
   const isPositive = percentage >= 0;
+  const formatted = data.length > 0 ? `${isPositive ? '+' : ''}${percentage.toFixed(1)}%` : '--';
 
   return (
-    <div className="flex flex-col justify-center rounded-xl border border-slate-800 bg-slate-900 p-4">
-      <h3 className="mb-2 text-xs font-bold tracking-wider text-slate-400 uppercase">
+    <div className="flex flex-col gap-1">
+      <span className="text-[11px] font-semibold tracking-wider text-on-surface-variant uppercase">
         Backtest Performance
-      </h3>
-      <div className={`text-3xl font-black ${isPositive ? 'text-emerald-400' : 'text-rose-400'}`}>
-        {data.length > 0 ? `${percentage.toFixed(2)}%` : '--'}
+      </span>
+      <div className="flex items-baseline gap-2">
+        <h2
+          className={`text-[30px] leading-[38px] font-bold tracking-tight ${
+            isPositive ? 'text-secondary' : 'text-error'
+          }`}
+        >
+          {formatted}
+        </h2>
+        <span className={`flex items-center ${isPositive ? 'text-secondary' : 'text-error'}`}>
+          <span className="material-symbols-outlined text-base">
+            {isPositive ? 'trending_up' : 'trending_down'}
+          </span>
+        </span>
       </div>
-      <p className="mt-1 text-[10px] text-slate-500 uppercase">Cumulative Return since inception</p>
+      <p className="mt-1 text-[13px] text-on-surface-variant">
+        Win Rate: {winRate}% • Trades: {trades}
+      </p>
     </div>
   );
 };

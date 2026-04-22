@@ -1,58 +1,127 @@
 'use client';
 
+import { useEffect, useMemo, useState } from 'react';
+
 import { ChartControls } from '@/features/chart-control/ui/chart-control';
 import { IndicatorSelector } from '@/features/chart-control/ui/indicator-selector';
+import { StockSearch } from '@/features/stock-search/ui/stock-search';
 import { TradeForm } from '@/features/trade-stock/ui/trade-form';
 
 import { StockChart } from '@/entities/stock/ui/stock-chart';
 
-import { useDashboardLogic } from '../lib/use-dashboard-logic';
+import { DashboardMode, useDashboardLogic } from '../lib/use-dashboard-logic';
 import { useDashboardUrlSync } from '../lib/use-url-sync';
-import { useDashboardStore } from '../model/dashborad-store';
+import { StrategyParams, useDashboardStore } from '../model/dashborad-store';
 import { PerformanceCard } from './performence-card';
-import { DashboardHeader } from './stock-dashboard-header';
+import { StrategyList } from './strategy-list';
 
-export const StockDashboardWidget = () => {
+interface Props {
+  mode: DashboardMode;
+}
+
+export const StockDashboardWidget = ({ mode }: Props) => {
   useDashboardUrlSync();
 
   const { symbol, setSymbol, indicators, toggleIndicator, strategyParams, setStrategyParam } =
     useDashboardStore();
 
   const { mergedData, backtestLine, companyName, markers, currentPrice, isLoading, refetch } =
-    useDashboardLogic();
+    useDashboardLogic(mode);
 
-  // 데이터가 있는지 확인 (차트를 그릴 최소 조건)
+  // Draft 파라미터: Run Backtest 누르기 전까지 store에 commit되지 않음.
+  // store가 바뀌면(URL hydration 등) draft도 동기화.
+  const [draftParams, setDraftParams] = useState<StrategyParams>(strategyParams);
+  useEffect(() => {
+    setDraftParams(strategyParams);
+  }, [strategyParams]);
+
   const hasData = mergedData.length > 0;
 
-  return (
-    <div className="flex h-screen flex-col gap-4 overflow-hidden bg-slate-950 p-4 text-slate-200">
-      <div className="mb-4 shrink-0">
-        {companyName ? (
-          <DashboardHeader companyName={companyName} symbol={symbol} onSearch={setSymbol} />
-        ) : (
-          <div className="h-18 w-full animate-pulse rounded-xl bg-slate-900/50" />
-        )}
-      </div>
+  const ohlc = useMemo(() => {
+    if (!hasData) return null;
+    const last = mergedData[mergedData.length - 1];
+    return {
+      open: last.open,
+      high: last.high,
+      low: last.low,
+      close: last.close,
+    };
+  }, [mergedData, hasData]);
 
-      <div className="grid flex-1 grid-cols-12 gap-4 overflow-hidden">
-        <aside className="scrollbar-hide col-span-12 flex flex-col gap-4 overflow-y-auto pr-1 md:col-span-3 lg:col-span-3 xl:col-span-3">
+  const updateDraftParam = (key: keyof StrategyParams, value: number | boolean) => {
+    setDraftParams((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const applyPreset = (config: Partial<StrategyParams>) => {
+    setDraftParams((prev) => ({ ...prev, ...config }));
+  };
+
+  const runBacktest = () => {
+    (Object.entries(draftParams) as [keyof StrategyParams, number | boolean][]).forEach(
+      ([key, value]) => setStrategyParam(key, value),
+    );
+    refetch();
+  };
+
+  return (
+    <div className="flex h-full flex-1 flex-col overflow-hidden md:flex-row">
+      {/* Left Sidebar: Strategy & Settings */}
+      <div className="z-10 flex h-full w-full shrink-0 flex-col overflow-y-auto border-r border-outline-variant/30 bg-surface-container-lowest shadow-[4px_0_24px_rgba(0,0,0,0.02)] md:w-[320px] lg:w-[360px]">
+        <div className="flex flex-col gap-6 p-4">
+          <StockSearch onSearch={setSymbol} currentSymbol={symbol} />
+
           <PerformanceCard data={backtestLine} />
 
-          <ChartControls
-            params={strategyParams}
-            onParamChange={setStrategyParam}
-            onApply={refetch}
-          />
-        </aside>
+          <hr className="border-outline-variant/40" />
 
-        <main className="col-span-12 flex h-full flex-col gap-4 md:col-span-9 lg:col-span-9 xl:col-span-9">
-          <IndicatorSelector options={indicators} onChange={toggleIndicator} />
+          <StrategyList params={draftParams} onSelect={applyPreset} />
 
-          <div className="relative min-h-0 flex-1 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl">
+          <hr className="border-outline-variant/40" />
+
+          <ChartControls params={draftParams} onParamChange={updateDraftParam} />
+        </div>
+
+        <div className="sticky bottom-0 mt-auto border-t border-outline-variant/30 bg-surface-container-lowest/90 p-4 backdrop-blur">
+          <button
+            onClick={runBacktest}
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-3 text-sm font-semibold text-on-primary shadow-[0_4px_12px_rgba(37,99,235,0.2)] transition-all hover:bg-on-primary-fixed-variant"
+          >
+            <span className="material-symbols-outlined text-[18px]">play_arrow</span>
+            Run Backtest
+          </button>
+        </div>
+      </div>
+
+      {/* Center Chart Area */}
+      <div className="relative flex flex-1 flex-col overflow-hidden bg-background">
+        <IndicatorSelector options={indicators} onChange={toggleIndicator} />
+
+        <div className="relative flex flex-1 flex-col overflow-hidden p-4">
+          {/* Info Overlay */}
+          <div className="pointer-events-none absolute top-6 left-6 z-10 flex flex-col gap-1 rounded-lg border border-outline-variant/30 bg-surface-container-lowest/80 p-3 shadow-sm backdrop-blur">
+            <div className="flex items-baseline gap-2">
+              <span className="text-[18px] leading-7 font-semibold text-on-surface">
+                {companyName || symbol}
+              </span>
+              <span className="text-[13px] text-on-surface-variant">
+                {mode === 'trade' ? '1m' : '1D'}
+              </span>
+            </div>
+            {ohlc && (
+              <div className="flex items-baseline gap-3 font-mono text-xs tabular-nums">
+                <span className="text-secondary">O: {ohlc.open.toFixed(2)}</span>
+                <span className="text-secondary">H: {ohlc.high.toFixed(2)}</span>
+                <span className="text-error">L: {ohlc.low.toFixed(2)}</span>
+                <span className="text-on-surface">C: {ohlc.close.toFixed(2)}</span>
+              </div>
+            )}
+          </div>
+
+          <div className="relative w-full flex-1 overflow-hidden rounded-xl border border-outline-variant/20 bg-white shadow-[0_4px_12px_rgba(0,0,0,0.03)]">
             {isLoading && (
-              <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-950/60 backdrop-blur-[2px] transition-all duration-300">
-                <div className="mb-4 h-12 w-12 animate-spin rounded-full border-4 border-emerald-500 border-t-transparent shadow-lg shadow-emerald-500/20" />
-                <p className="animate-pulse font-medium text-emerald-500">Syncing Market Data...</p>
+              <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-surface/60 backdrop-blur-[2px]">
+                <div className="mb-4 h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+                <p className="text-sm font-medium text-primary">Syncing Market Data...</p>
               </div>
             )}
 
@@ -67,17 +136,17 @@ export const StockDashboardWidget = () => {
               </div>
             ) : (
               !isLoading && (
-                <div className="flex h-full items-center justify-center text-slate-500">
+                <div className="flex h-full items-center justify-center text-on-surface-variant">
                   Waiting for data...
                 </div>
               )
             )}
           </div>
+        </div>
 
-          <div className="shrink-0">
-            <TradeForm symbol={symbol} currentPrice={currentPrice} onOrderPlaced={refetch} />
-          </div>
-        </main>
+        {mode === 'trade' && (
+          <TradeForm symbol={symbol} currentPrice={currentPrice} onOrderPlaced={refetch} />
+        )}
       </div>
     </div>
   );
