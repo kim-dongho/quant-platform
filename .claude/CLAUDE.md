@@ -141,6 +141,7 @@ Format: `<type>(<scope>): <한국어 설명>`
 ### Scope
 변경이 발생한 앱(들)을 명시. 복수인 경우 콤마로 나열.
 - `web`, `server`, `engine`
+- `common` — 저장소 루트/공통 설정(도커, CI, 모노레포 설정, 루트 문서 등 앱 경계를 넘는 변경)
 - 복합 예시: `engine,server`, `engine,server,web`
 
 ### Description
