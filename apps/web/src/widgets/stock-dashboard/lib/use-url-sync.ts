@@ -35,7 +35,7 @@ export const useDashboardUrlSync = () => {
 
       // 값이 존재하고(null 아님) 현재 스토어 값과 다르면 업데이트
       if (value !== null && value !== undefined) {
-        // @ts-ignore: 키 타입 매칭이 복잡해서 일단 무시 (안전함)
+        // @ts-ignore: 키 타입 매칭이 복잡해서 일단 무시
         setStrategyParam(key, value);
       }
     });

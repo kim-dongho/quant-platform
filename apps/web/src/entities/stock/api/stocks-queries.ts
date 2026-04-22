@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getBacktestResult, getStockHistory, getStockList } from './stocks-api';
 
 // 시세 데이터 쿼리
-export const useStockHistoryQuery = (symbol: string) => {
+export const useStockHistoryQuery = (symbol: string, options?: { enabled?: boolean }) => {
   return useQuery({
     queryKey: ['stockHistory', symbol],
     queryFn: async () => {
@@ -11,7 +11,7 @@ export const useStockHistoryQuery = (symbol: string) => {
       return 'data' in res ? res : { company_name: symbol, data: res as any };
     },
     staleTime: 1000 * 60 * 5,
-    enabled: !!symbol,
+    enabled: !!symbol && (options?.enabled ?? true),
     retry: 1,
   });
 };

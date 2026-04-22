@@ -1,5 +1,5 @@
 export interface MarketData {
-  time: string;
+  time: string | number;
   symbol: string;
   open: number;
   high: number;
