@@ -81,6 +81,35 @@ body {
     'opsz' 24;
 }
 
+/* 전역 스크롤바 스타일 — 디자인 토큰(outline-variant) 기반 얇고 은은하게 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-outline-variant) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--color-outline-variant);
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--color-outline);
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
