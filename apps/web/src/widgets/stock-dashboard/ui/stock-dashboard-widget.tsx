@@ -85,16 +85,18 @@ export const StockDashboardWidget = ({ mode }: Props) => {
           <div className="ml-auto w-full max-w-xs">
             <StockSearch onSearch={setSymbol} currentSymbol={symbol} />
           </div>
-          <button
-            type="button"
-            onClick={() => setSidebarOpen((v) => !v)}
-            aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
-            className="flex h-8 w-8 items-center justify-center rounded-md text-on-surface-variant transition-colors hover:bg-surface-container-low hover:text-on-surface"
-          >
-            <span className="material-symbols-outlined text-[20px]">
-              {sidebarOpen ? 'right_panel_close' : 'right_panel_open'}
-            </span>
-          </button>
+          {mode === 'backtest' && (
+            <button
+              type="button"
+              onClick={() => setSidebarOpen((v) => !v)}
+              aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+              className="flex h-8 w-8 items-center justify-center rounded-md text-on-surface-variant transition-colors hover:bg-surface-container-low hover:text-on-surface"
+            >
+              <span className="material-symbols-outlined text-[20px]">
+                {sidebarOpen ? 'right_panel_close' : 'right_panel_open'}
+              </span>
+            </button>
+          )}
         </div>
 
         <IndicatorSelector options={indicators} onChange={toggleIndicator} />
@@ -132,7 +134,8 @@ export const StockDashboardWidget = ({ mode }: Props) => {
         )}
       </div>
 
-      {/* Right Sidebar: Strategy & Settings */}
+      {/* Right Sidebar: Strategy & Settings (Backtest 모드 전용) */}
+      {mode === 'backtest' && (
       <aside
         className={`z-10 flex h-full shrink-0 flex-col overflow-hidden border-l border-outline-variant/30 bg-surface-container-lowest shadow-[-4px_0_24px_rgba(0,0,0,0.02)] transition-[width] duration-300 ease-in-out ${
           sidebarOpen ? 'w-full md:w-[320px] lg:w-[360px]' : 'w-0 border-l-0'
@@ -162,6 +165,7 @@ export const StockDashboardWidget = ({ mode }: Props) => {
           </div>
         </div>
       </aside>
+      )}
     </div>
   );
 };
