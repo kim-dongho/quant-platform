@@ -49,21 +49,3 @@ export interface PortfolioBacktestResult {
   end_date?: string;
   note?: string;
 }
-
-export interface IngestUniverseResponse {
-  status: 'started' | 'already_running';
-  universe: string;
-  count: number;
-}
-
-export interface IngestStatus {
-  universe: string;
-  status: 'idle' | 'running' | 'done';
-  total?: number;
-  completed?: number;
-  succeeded?: number;
-  failed?: number;
-  current?: string | null;
-  started_at?: number;
-  finished_at?: number | null;
-}

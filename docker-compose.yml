@@ -6,8 +6,16 @@ services:
     image: timescale/timescaledb:latest-pg14
     container_name: quant-db
     restart: always
-    # 하이퍼테이블을 여러 종목·기간으로 스캔할 때 락을 충분히 확보하기 위해 기본값 64 → 512로 상향
-    command: postgres -c max_locks_per_transaction=512
+    # parallel hash/sort(/dev/shm) 기본 64MB 한계로 500+ 심볼 DISTINCT ON 쿼리가 터지는 걸 방지
+    shm_size: 1gb
+    # - max_locks_per_transaction: 하이퍼테이블 다종목 스캔 시 락 확보 (64 → 512)
+    # - work_mem: DISTINCT ON / sort 가 디스크 spill 없이 메모리에서 처리되도록 상향
+    # - shared_buffers: 반복 조회되는 factors/market_data 캐시 확대
+    command: >-
+      postgres
+      -c max_locks_per_transaction=512
+      -c work_mem=64MB
+      -c shared_buffers=512MB
     environment:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
@@ -57,9 +65,19 @@ services:
       context: ./apps/engine
       dockerfile: Dockerfile
     container_name: quant-engine
+    # 개발용 volume mount: 호스트 src/ 변경을 컨테이너에서 즉시 반영 (재빌드 불필요)
+    # 패키지 의존성(requirements.txt) 추가 시에만 docker-compose build engine
+    volumes:
+      - ./apps/engine/src:/app/src
     environment:
       DB_DSN: "postgresql://user:password@db:5432/quant"
       REDIS_HOST: "redis"
+      # 한국투자증권(KIS) Open API — .env에서 주입
+      KIS_APP_KEY: ${KIS_APP_KEY:-}
+      KIS_APP_SECRET: ${KIS_APP_SECRET:-}
+      KIS_ACCOUNT_NUMBER: ${KIS_ACCOUNT_NUMBER:-}
+      KIS_ACCOUNT_PRODUCT_CODE: ${KIS_ACCOUNT_PRODUCT_CODE:-01}
+      KIS_MODE: ${KIS_MODE:-paper}
     depends_on:
       db:
         condition: service_healthy

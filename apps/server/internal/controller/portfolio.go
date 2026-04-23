@@ -104,49 +104,6 @@ func DeletePortfolioRule(c *fiber.Ctx) error {
 	return c.SendStatus(204)
 }
 
-// GetIngestStatus godoc
-// @Summary      유니버스 수집 진행 상태 조회 (엔진 프록시)
-// @Tags         portfolio
-// @Produce      json
-// @Param        universe  query     string  false  "Universe name (default: sp500)"
-// @Success      200       {object}  map[string]interface{}
-// @Router       /portfolio/ingest_status [get]
-func GetIngestStatus(c *fiber.Ctx) error {
-	universe := c.Query("universe", "sp500")
-	url := "http://engine:8000/portfolio/ingest_status?universe=" + universe
-
-	agent := fiber.Get(url)
-	status, body, errs := agent.Bytes()
-	if len(errs) > 0 {
-		return c.Status(500).JSON(fiber.Map{"error": "Engine connection failed"})
-	}
-	c.Set("Content-Type", "application/json")
-	return c.Status(status).Send(body)
-}
-
-// IngestUniverse godoc
-// @Summary      유니버스 전체 데이터 수집 트리거 (엔진 프록시)
-// @Description  지정한 universe에 속한 모든 종목의 일봉/팩터를 백그라운드로 수집. 즉시 202 반환.
-// @Tags         portfolio
-// @Produce      json
-// @Param        universe  query     string  false  "Universe name (default: sp500)"
-// @Success      202       {object}  map[string]interface{}
-// @Failure      400       {object}  map[string]string
-// @Failure      409       {object}  map[string]interface{}
-// @Router       /portfolio/ingest_universe [post]
-func IngestUniverse(c *fiber.Ctx) error {
-	universe := c.Query("universe", "sp500")
-	url := "http://engine:8000/portfolio/ingest_universe?universe=" + universe
-
-	agent := fiber.Post(url)
-	status, body, errs := agent.Bytes()
-	if len(errs) > 0 {
-		return c.Status(500).JSON(fiber.Map{"error": "Engine connection failed"})
-	}
-	c.Set("Content-Type", "application/json")
-	return c.Status(status).Send(body)
-}
-
 // ScreenPortfolio godoc
 // @Summary      포트폴리오 스크리닝 실행 (엔진 프록시)
 // @Tags         portfolio

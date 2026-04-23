@@ -6,6 +6,15 @@ definitions:
         example: NVDA
         type: string
     type: object
+  internal_controller.StockSearchItem:
+    properties:
+      name:
+        example: Rocket Lab Corporation
+        type: string
+      symbol:
+        example: RKLB
+        type: string
+    type: object
   quant-server_internal_model.BacktestRequest:
     type: object
   quant-server_internal_model.IntradayCandle:
@@ -158,6 +167,135 @@ paths:
       summary: 퀀트 백테스트 실행
       tags:
       - backtest
+  /paper/balance:
+    get:
+      description: KIS Open API로 잔고와 보유종목을 조회합니다. 모의/실전 분기는 엔진의 KIS_MODE 환경변수가 결정합니다.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: 모의투자 계좌 잔고 조회 (KIS API 엔진 프록시)
+      tags:
+      - paper
+  /paper/orders:
+    get:
+      parameters:
+      - description: YYYYMMDD — 생략 시 오늘
+        in: query
+        name: start_date
+        type: string
+      - description: YYYYMMDD — 생략 시 오늘
+        in: query
+        name: end_date
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              additionalProperties: true
+              type: object
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: 모의투자 주문/체결 내역 (KIS API 엔진 프록시)
+      tags:
+      - paper
+    post:
+      consumes:
+      - application/json
+      description: '{ symbol, qty, side: buy|sell, order_type: market|limit, price?
+        }'
+      parameters:
+      - description: 주문 payload
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: 모의투자 주문 (KIS API 엔진 프록시)
+      tags:
+      - paper
+  /paper/quote/{symbol}:
+    get:
+      parameters:
+      - description: 6자리 숫자 코드 또는 .KS/.KQ suffix 포함
+        in: path
+        name: symbol
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: 국내주식 현재가 (KIS API 엔진 프록시)
+      tags:
+      - paper
   /portfolio/backtest:
     post:
       consumes:
@@ -186,54 +324,6 @@ paths:
               type: string
             type: object
       summary: 포트폴리오 백테스트 실행 (엔진 프록시)
-      tags:
-      - portfolio
-  /portfolio/ingest_status:
-    get:
-      parameters:
-      - description: 'Universe name (default: sp500)'
-        in: query
-        name: universe
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-      summary: 유니버스 수집 진행 상태 조회 (엔진 프록시)
-      tags:
-      - portfolio
-  /portfolio/ingest_universe:
-    post:
-      description: 지정한 universe에 속한 모든 종목의 일봉/팩터를 백그라운드로 수집. 즉시 202 반환.
-      parameters:
-      - description: 'Universe name (default: sp500)'
-        in: query
-        name: universe
-        type: string
-      produces:
-      - application/json
-      responses:
-        "202":
-          description: Accepted
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "409":
-          description: Conflict
-          schema:
-            additionalProperties: true
-            type: object
-      summary: 유니버스 전체 데이터 수집 트리거 (엔진 프록시)
       tags:
       - portfolio
   /portfolio/rules:
@@ -477,6 +567,38 @@ paths:
               type: string
             type: object
       summary: 종목 리스트 조회 (자동완성용)
+      tags:
+      - stocks
+  /stocks/search:
+    get:
+      description: 'symbol 또는 회사명(영문·한국어)에 q가 포함된 종목을 랭킹 순으로 반환합니다. 순위: 완전일치 > symbol
+        접두사 > name 접두사 > symbol 부분일치 > name 부분일치.'
+      parameters:
+      - description: 검색어 (symbol 또는 회사명 일부)
+        in: query
+        name: q
+        required: true
+        type: string
+      - description: 최대 반환 개수 (기본 20, 최대 100)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/internal_controller.StockSearchItem'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: 종목 자동완성 검색
       tags:
       - stocks
 swagger: "2.0"

@@ -1,13 +1,10 @@
-import threading
-import time
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from src.core.config import UNIVERSE_NAMES, get_universe
 from src.service.backtest import calculate_strategy
 from src.service.ingest import save_to_db
 from src.service.ingest_1m import save_1m_to_db
 from src.service.market_calendar import get_last_session_date
+from src.service.kis_client import KisError, get_kis_client
 from src.service.portfolio_backtest import run_portfolio_backtest
 from src.service.screener import ScreenError, run_screen
 from typing import Dict, Any, List, Optional
@@ -26,23 +23,23 @@ class BacktestRequest(BaseModel):
 @router.post("/backtest")
 def run_backtest_api(req: BacktestRequest):
     print(f"🚀 Running backtest for {req.ticker} with params: {req.params}")
-    
+
     result = calculate_strategy(req.ticker, req.params)
-    
+
     if result is None:
         return {"error": "Backtest failed or no data available"}
-        
+
     return result
 
 @router.post("/ingest/{ticker}")
 def ingest_data_api(ticker: str):
     print(f"📥 Starting ingestion for: {ticker}")
-    
+
     try:
         # Service Layer 호출
         result = save_to_db(ticker)
         return result
-        
+
     except ValueError as e:
         # Yahoo Finance에 없는 종목 등
         raise HTTPException(status_code=404, detail=str(e))
@@ -71,99 +68,6 @@ class ScreenRequest(BaseModel):
     clauses: List[ScreenClause] = []
     max_positions: int = 10
     as_of: Optional[str] = None
-
-
-# 유니버스별 수집 진행 상태 (프론트 폴링용)
-_ingestion_state: Dict[str, Dict[str, Any]] = {}
-_ingestion_lock = threading.Lock()
-
-
-def _ingest_universe_worker(universe: str, symbols: List[str]):
-    print(f"🌐 [universe={universe}] ingest start, {len(symbols)} tickers")
-    total = len(symbols)
-    succeeded = 0
-    failed = 0
-
-    for i, ticker in enumerate(symbols):
-        with _ingestion_lock:
-            _ingestion_state[universe]["current"] = ticker
-        try:
-            save_to_db(ticker)
-            succeeded += 1
-        except Exception as e:
-            failed += 1
-            print(f"⚠️ [{universe}] {ticker} failed: {e}")
-        with _ingestion_lock:
-            _ingestion_state[universe].update(
-                {"completed": i + 1, "succeeded": succeeded, "failed": failed}
-            )
-        time.sleep(1.2)  # yfinance rate limit 완화
-
-    print(f"✅ [universe={universe}] ingest done: {succeeded}/{total} ({failed} failed)")
-    with _ingestion_lock:
-        _ingestion_state[universe].update(
-            {"status": "done", "current": None, "finished_at": time.time()}
-        )
-
-
-@router.post("/portfolio/ingest_universe")
-def ingest_universe(universe: str = "sp500"):
-    """
-    유니버스 전체를 백그라운드 스레드로 수집. 즉시 202 반환.
-    진행 상황은 GET /portfolio/ingest_status 로 폴링.
-    """
-    if universe == "all":
-        raise HTTPException(
-            status_code=400,
-            detail="'all' universe cannot be ingested via API. Use ./scripts/ingest-universe.sh from host.",
-        )
-    if universe not in UNIVERSE_NAMES:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unknown universe: {universe}. Allowed: {sorted(UNIVERSE_NAMES)}",
-        )
-
-    try:
-        symbols = list(dict.fromkeys(get_universe(universe)))  # dedupe, 순서 보존
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to load universe: {e}")
-
-    with _ingestion_lock:
-        existing = _ingestion_state.get(universe)
-        if existing and existing.get("status") == "running":
-            return JSONResponse(
-                status_code=409,
-                content={"status": "already_running", "universe": universe, "count": len(symbols)},
-            )
-        _ingestion_state[universe] = {
-            "status": "running",
-            "total": len(symbols),
-            "completed": 0,
-            "succeeded": 0,
-            "failed": 0,
-            "current": None,
-            "started_at": time.time(),
-            "finished_at": None,
-        }
-
-    threading.Thread(
-        target=_ingest_universe_worker, args=(universe, symbols), daemon=True
-    ).start()
-
-    return JSONResponse(
-        status_code=202,
-        content={"status": "started", "universe": universe, "count": len(symbols)},
-    )
-
-
-@router.get("/portfolio/ingest_status")
-def get_ingest_status(universe: str = "sp500"):
-    """현재 수집 진행 상태 반환. 한 번도 안 돌렸으면 status='idle'."""
-    with _ingestion_lock:
-        state = _ingestion_state.get(universe)
-    if state is None:
-        return {"universe": universe, "status": "idle"}
-    return {"universe": universe, **state}
 
 
 @router.post("/portfolio/screen")
@@ -207,6 +111,68 @@ def portfolio_backtest_api(req: PortfolioBacktestRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/paper/balance")
+def get_paper_balance():
+    """모의/실전 KIS 계좌 잔고 조회. KIS_MODE 환경변수로 분기."""
+    try:
+        return get_kis_client().get_balance()
+    except KisError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"❌ KIS balance failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class PaperOrderRequest(BaseModel):
+    symbol: str
+    qty: int
+    side: str  # 'buy' | 'sell'
+    order_type: str = "market"  # 'market' | 'limit'
+    price: Optional[float] = None
+
+
+@router.post("/paper/orders")
+def place_paper_order(req: PaperOrderRequest):
+    """KIS Open API로 현금 주문을 전송한다. 모의/실전은 KIS_MODE로 결정."""
+    try:
+        return get_kis_client().place_order(
+            symbol=req.symbol,
+            qty=req.qty,
+            side=req.side,
+            order_type=req.order_type,
+            price=req.price,
+        )
+    except KisError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"❌ KIS order failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/paper/orders")
+def get_paper_orders(start_date: Optional[str] = None, end_date: Optional[str] = None):
+    """당일(또는 지정 기간) 주문·체결 내역."""
+    try:
+        return get_kis_client().get_daily_orders(start_date=start_date, end_date=end_date)
+    except KisError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"❌ KIS orders failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/paper/quote/{symbol}")
+def get_paper_quote(symbol: str):
+    """국내주식 현재가(호가·전일대비·거래량)."""
+    try:
+        return get_kis_client().get_current_price(symbol)
+    except KisError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"❌ KIS quote failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/market/last_session")
 def get_last_session(market: str = "NASDAQ"):
     """
@@ -225,12 +191,12 @@ def get_stock_list():
     DB에 저장된 모든 종목의 티커와 이름을 가져옵니다.
     중복을 제거하고(DISTINCT), 티커 순으로 정렬합니다.
     """
-    # market_data 테이블에서 symbol만 가져오거나, 
+    # market_data 테이블에서 symbol만 가져오거나,
     # 별도의 company_info 테이블이 있다면 거기서 가져오는 것이 더 효율적입니다.
     # 여기서는 market_data에서 유니크한 값을 뽑는 예시입니다.
     query = """
-        SELECT DISTINCT symbol 
-        FROM market_data 
+        SELECT DISTINCT symbol
+        FROM market_data
         ORDER BY symbol ASC
     """
     try:

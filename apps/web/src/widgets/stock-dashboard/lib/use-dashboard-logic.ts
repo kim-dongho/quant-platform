@@ -1,85 +1,21 @@
 // apps/web/src/widgets/stock-dashboard/lib/use-dashboard-logic.ts
-import { useEffect, useMemo, useState } from 'react';
+// Backtest 대시보드 전용 훅. Trade 모드는 별도 widgets/trade-dashboard를 사용.
+import { useMemo } from 'react';
 
 import { SeriesMarker } from 'lightweight-charts';
 
-// API & Store
 import { useBacktestQuery, useStockHistoryQuery } from '@/entities/stock/api/stocks-queries';
-import { MarketData } from '@/entities/stock/model/stocks-common';
-
-// 타입 경로 확인
-
-// CSV 파서
-import { parseCSV } from '@/shared/lib/csv-parser';
 
 import { useDashboardStore } from '../model/dashborad-store';
 
-export type DashboardMode = 'backtest' | 'trade';
-
-export const useDashboardLogic = (mode: DashboardMode) => {
+export const useDashboardLogic = () => {
   const symbol = useDashboardStore((s) => s.symbol);
   const params = useDashboardStore((s) => s.strategyParams);
 
-  // ----------------------------------------------------------------
-  // 1. [Backtest Mode] 일봉 API 데이터 (기존 로직)
-  // ----------------------------------------------------------------
-  const isBacktest = mode === 'backtest';
-  const historyQuery = useStockHistoryQuery(symbol, { enabled: isBacktest });
-  const backtestQuery = useBacktestQuery(symbol, params, isBacktest && !!historyQuery.data);
+  const historyQuery = useStockHistoryQuery(symbol);
+  const backtestQuery = useBacktestQuery(symbol, params, !!historyQuery.data);
 
-  // ----------------------------------------------------------------
-  // 2. [Trade Mode] 1분봉 CSV/API 데이터
-  // ----------------------------------------------------------------
-  const [tradeData, setTradeData] = useState<MarketData[]>([]);
-  const [isTradeLoading, setIsTradeLoading] = useState(false);
-
-  useEffect(() => {
-    if (mode !== 'trade') return; // 트레이드 모드일 때만 실행
-
-    const loadIntradayData = async () => {
-      setIsTradeLoading(true);
-      try {
-        // 나중에는 여기서 '/api/candles?tf=1m'을 호출하면 됩니다.
-        const res = await fetch('/RKLB_1m.csv');
-        if (!res.ok) throw new Error('Failed to load intraday data');
-
-        const text = await res.text();
-        const parsed = parseCSV(text);
-
-        // 타입 보정
-        const formatted = parsed.map((p) => ({
-          ...p,
-          symbol: symbol || 'RKLB',
-          volume: p.volume ?? 0,
-        })) as unknown as MarketData[];
-
-        setTradeData(formatted);
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setIsTradeLoading(false);
-      }
-    };
-
-    loadIntradayData();
-  }, [mode, symbol]);
-
-  // ----------------------------------------------------------------
-  // 3. 데이터 병합 및 리턴 (모드별 분기)
-  // ----------------------------------------------------------------
   const { mergedData, markers, backtestLine, trades, winRate } = useMemo(() => {
-    // (A) Trade Mode: 1분봉만 보여줌 (백테스트 라인 없음)
-    if (mode === 'trade') {
-      return {
-        mergedData: tradeData,
-        markers: [], // 필요하면 매매 타점 마커 추가 가능
-        backtestLine: [], // 실전 매매에선 수익률 그래프 보통 안 봄
-        trades: 0,
-        winRate: 0,
-      };
-    }
-
-    // (B) Backtest Mode: 일봉 + 전략 지표 + 수익률 라인 (기존 로직)
     const rawData = historyQuery.data?.data;
     const results = backtestQuery.data?.results;
 
@@ -93,7 +29,6 @@ export const useDashboardLogic = (mode: DashboardMode) => {
     const merged = rawData.map((candle: any) => {
       const indicators = indicatorMap.get(candle.time);
 
-      // 매매 신호 마커
       if (indicators?.action) {
         const isBuy = indicators.action === 'buy';
         generatedMarkers.push({
@@ -119,8 +54,7 @@ export const useDashboardLogic = (mode: DashboardMode) => {
       };
     });
 
-    // 거래 횟수/승률 계산: buy → sell 페어 단위로, sell 시점 누적수익이
-    // buy 시점 누적수익보다 크면 승. 마지막 buy가 아직 청산 안 됐으면 제외.
+    // 거래 횟수/승률: buy → sell 페어 단위
     let tradeCount = 0;
     let winCount = 0;
     let entryValue: number | null = null;
@@ -142,7 +76,7 @@ export const useDashboardLogic = (mode: DashboardMode) => {
       trades: tradeCount,
       winRate: winRatePct,
     };
-  }, [mode, tradeData, historyQuery.data, backtestQuery.data]);
+  }, [historyQuery.data, backtestQuery.data]);
 
   return {
     mergedData,
@@ -150,16 +84,11 @@ export const useDashboardLogic = (mode: DashboardMode) => {
     backtestLine,
     trades,
     winRate,
-    companyName: mode === 'trade' ? symbol : historyQuery.data?.company_name || symbol,
-    isLoading:
-      mode === 'trade' ? isTradeLoading : historyQuery.isLoading || backtestQuery.isLoading,
-    currentPrice: mergedData.length > 0 ? mergedData[mergedData.length - 1].close : 0,
+    companyName: historyQuery.data?.company_name || symbol,
+    isLoading: historyQuery.isLoading || backtestQuery.isLoading,
     refetch: () => {
-      if (mode === 'trade') window.location.reload();
-      else {
-        historyQuery.refetch();
-        backtestQuery.refetch();
-      }
+      historyQuery.refetch();
+      backtestQuery.refetch();
     },
   };
 };

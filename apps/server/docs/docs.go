@@ -68,6 +68,199 @@ const docTemplate = `{
                 }
             }
         },
+        "/paper/balance": {
+            "get": {
+                "description": "KIS Open API로 잔고와 보유종목을 조회합니다. 모의/실전 분기는 엔진의 KIS_MODE 환경변수가 결정합니다.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "paper"
+                ],
+                "summary": "모의투자 계좌 잔고 조회 (KIS API 엔진 프록시)",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/paper/orders": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "paper"
+                ],
+                "summary": "모의투자 주문/체결 내역 (KIS API 엔진 프록시)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "YYYYMMDD — 생략 시 오늘",
+                        "name": "start_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "YYYYMMDD — 생략 시 오늘",
+                        "name": "end_date",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "additionalProperties": true
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "{ symbol, qty, side: buy|sell, order_type: market|limit, price? }",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "paper"
+                ],
+                "summary": "모의투자 주문 (KIS API 엔진 프록시)",
+                "parameters": [
+                    {
+                        "description": "주문 payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/paper/quote/{symbol}": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "paper"
+                ],
+                "summary": "국내주식 현재가 (KIS API 엔진 프록시)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "6자리 숫자 코드 또는 .KS/.KQ suffix 포함",
+                        "name": "symbol",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/portfolio/backtest": {
             "post": {
                 "consumes": [
@@ -107,79 +300,6 @@ const docTemplate = `{
                             "additionalProperties": {
                                 "type": "string"
                             }
-                        }
-                    }
-                }
-            }
-        },
-        "/portfolio/ingest_status": {
-            "get": {
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "portfolio"
-                ],
-                "summary": "유니버스 수집 진행 상태 조회 (엔진 프록시)",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Universe name (default: sp500)",
-                        "name": "universe",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/portfolio/ingest_universe": {
-            "post": {
-                "description": "지정한 universe에 속한 모든 종목의 일봉/팩터를 백그라운드로 수집. 즉시 202 반환.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "portfolio"
-                ],
-                "summary": "유니버스 전체 데이터 수집 트리거 (엔진 프록시)",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Universe name (default: sp500)",
-                        "name": "universe",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "202": {
-                        "description": "Accepted",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "409": {
-                        "description": "Conflict",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
                         }
                     }
                 }
@@ -428,6 +548,53 @@ const docTemplate = `{
                 }
             }
         },
+        "/stocks/search": {
+            "get": {
+                "description": "symbol 또는 회사명(영문·한국어)에 q가 포함된 종목을 랭킹 순으로 반환합니다. 순위: 완전일치 \u003e symbol 접두사 \u003e name 접두사 \u003e symbol 부분일치 \u003e name 부분일치.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "stocks"
+                ],
+                "summary": "종목 자동완성 검색",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "검색어 (symbol 또는 회사명 일부)",
+                        "name": "q",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "최대 반환 개수 (기본 20, 최대 100)",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/internal_controller.StockSearchItem"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/stocks/{symbol}/history": {
             "get": {
                 "description": "특정 심볼의 회사명과 과거 시세 데이터를 조회합니다. (없으면 자동 수집)",
@@ -563,6 +730,19 @@ const docTemplate = `{
                 "symbol": {
                     "type": "string",
                     "example": "NVDA"
+                }
+            }
+        },
+        "internal_controller.StockSearchItem": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "example": "Rocket Lab Corporation"
+                },
+                "symbol": {
+                    "type": "string",
+                    "example": "RKLB"
                 }
             }
         },

@@ -1,7 +1,7 @@
 'use client';
 
-import { StockDashboardWidget } from '@/widgets/stock-dashboard/ui/stock-dashboard-widget';
+import { TradeDashboardWidget } from '@/widgets/trade-dashboard/ui/trade-dashboard-widget';
 
 export default function TradePage() {
-  return <StockDashboardWidget mode="trade" />;
+  return <TradeDashboardWidget />;
 }
