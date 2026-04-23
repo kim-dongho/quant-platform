@@ -1,0 +1,6 @@
+pnpm exec lint-staged
+
+# gitleaks — 설치되어 있을 때만 실행 (brew install gitleaks)
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks protect --staged --redact --no-banner
+fi
