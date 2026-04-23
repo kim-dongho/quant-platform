@@ -3,14 +3,13 @@
 # 엔진 컨테이너 내부에서 실행되며, 모든 인자는 그대로 Python script에 전달됩니다.
 #
 # 사용 예:
-#   ./scripts/ingest-universe.sh                              # all-us (R1000∪R2000∪NDX100+SPY)
-#   ./scripts/ingest-universe.sh --universe sp500             # 미국 SP500
-#   ./scripts/ingest-universe.sh --universe kospi200          # 국내 KOSPI 200 (시총 기준)
-#   ./scripts/ingest-universe.sh --universe krx350            # 국내 KOSPI200 ∪ KOSDAQ150
-#   ./scripts/ingest-universe.sh --limit 200                  # 처음 200종목 테스트
-#   ./scripts/ingest-universe.sh --batch-size 50 --sleep 2
+#   ./scripts/ingest-universe.sh                              # 기본: 미국(R1000∪R2000∪NDX100+SPY) + 국내(KRX 350)
+#   ./scripts/ingest-universe.sh --universe sp500             # 미국 SP500만
+#   ./scripts/ingest-universe.sh --universe nasdaq100         # 미국 NASDAQ 100만
+#   ./scripts/ingest-universe.sh --universe kospi200          # 국내 KOSPI 200만
+#   ./scripts/ingest-universe.sh --universe krx350            # 국내 KOSPI200 + KOSDAQ150
+#   ./scripts/ingest-universe.sh --universe sp500 --limit 200 # 처음 200종목 테스트
 #   ./scripts/ingest-universe.sh --tickers-file /tmp/my.txt
-#   ./scripts/ingest-universe.sh --skip-factors
 #
 # 백그라운드로 돌리고 싶으면:
 #   nohup ./scripts/ingest-universe.sh > /dev/null 2>&1 &

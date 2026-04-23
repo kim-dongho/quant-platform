@@ -27,13 +27,17 @@ from sqlalchemy import MetaData, Table, text
 from sqlalchemy.dialects.postgresql import insert
 
 from src.core.config import (
-    get_bulk_ingest_universe,
+    get_all_ingest_universe,
     get_company_names_map,
     get_universe,
     is_krx_symbol,
 )
 from src.core.database import engine
-from src.service.factors import compute_factors_for_symbol
+from src.service.factors import (
+    compute_factors_for_symbol,
+    get_factor_max_times,
+    get_market_max_times,
+)
 
 DEFAULT_BATCH_SIZE = 100
 DEFAULT_SLEEP = 1.5
@@ -241,9 +245,10 @@ def process_krx_batch(
             else:
                 failed += 1
             continue
-        # 증분이면 last 이후로만
+        # 증분이면 last 이후로만 — pandas DatetimeIndex(datetime64[s]) vs Python datetime 직접 비교는
+        # pandas 2.x 에서 단위 불일치로 실패. date 기준으로 비교해 안전하게.
         if last is not None:
-            df = df[df.index > last]
+            df = df[df.index.date > last.date()]
             if df.empty:
                 succeeded += 1
                 continue
@@ -305,8 +310,8 @@ def process_batch(
                     # 증분 데이터 없음 = 이미 최신
                     succeeded += 1
                     continue
-                # 종목별 last_date 이후 행만
-                sub = sub[sub.index > last_dates[sym]]
+                # 종목별 last_date 이후 행만 — date 비교로 pandas 2.x 단위 불일치 회피.
+                sub = sub[sub.index.date > last_dates[sym].date()]
                 if sub.empty:
                     succeeded += 1
                     continue
@@ -330,10 +335,11 @@ def main():
     )
     parser.add_argument(
         "--universe",
-        default="all-us",
+        default="all",
         help=(
-            "수집할 유니버스: sp500 / nasdaq100 / russell1000 / russell2000 / russell3000 / "
-            "watchlist / kospi200 / kosdaq150 / krx350 / all-us (기본: R1000∪R2000∪NDX100+SPY)"
+            "수집할 유니버스. 기본 'all' = 미국(R1000∪R2000∪NDX100+SPY) + 국내(KRX 350). "
+            "개별: sp500 / nasdaq100 / russell1000 / russell2000 / russell3000 / "
+            "watchlist / kospi200 / kosdaq150 / krx350"
         ),
     )
     parser.add_argument("--limit", type=int, help="처음 N개 종목만 테스트")
@@ -371,9 +377,9 @@ def main():
     if args.tickers_file:
         tickers = load_tickers_from_file(args.tickers_file)
         print(f"📄 Loaded {len(tickers)} tickers from {args.tickers_file}")
-    elif args.universe == "all-us":
-        tickers = get_bulk_ingest_universe()
-        print(f"🇺🇸 Universe: all-us ({len(tickers)} symbols)")
+    elif args.universe == "all":
+        tickers = get_all_ingest_universe()
+        print(f"🌐 Universe: all (미국 + 국내, {len(tickers)} symbols)")
     else:
         tickers = list(dict.fromkeys(get_universe(args.universe)))
         print(f"🗂  Universe: {args.universe} ({len(tickers)} symbols)")
@@ -442,13 +448,40 @@ def main():
 
     print(f"\n📊 Computing factors for {len(tickers)} symbols...")
     fac_start = time.time()
+
+    # Bulk MAX(time) 조회 — factors / market_data 각각 한 번의 GROUP BY 쿼리로.
+    # market_data 최신 ≤ factors 최신인 심볼은 이미 계산 완료 → 스킵.
+    factor_max = get_factor_max_times(tickers)
+    market_max = get_market_max_times(tickers)
+
+    todo = []
+    skipped = 0
+    for sym in tickers:
+        fmax = factor_max.get(sym)
+        mmax = market_max.get(sym)
+        if mmax is None:
+            # market_data 자체가 없으면 계산 불가
+            skipped += 1
+            continue
+        if fmax is not None and fmax >= mmax:
+            skipped += 1
+            continue
+        todo.append(sym)
+
+    print(f"   → {skipped} already up-to-date, {len(todo)} to compute")
+
+    if not todo:
+        print(f"✅ Factors done: 0 ok, 0 fail, {skipped} skipped, {time.time() - fac_start:.0f}s")
+        print(f"\n🎉 All done in {time.time() - start_ts:.0f}s")
+        return
+
     fac_ok = 0
     fac_fail = 0
-    total = len(tickers)
+    total = len(todo)
     progress_every = 50
-    for i, sym in enumerate(tickers):
+    for i, sym in enumerate(todo):
         try:
-            n = compute_factors_for_symbol(sym)
+            n = compute_factors_for_symbol(sym, last_time=factor_max.get(sym))
             if n > 0:
                 fac_ok += 1
         except Exception as e:
@@ -461,7 +494,9 @@ def main():
             print(
                 f"  [{i + 1}/{total}] {pct:.1f}% · last: {sym} · {elapsed:.0f}s · ETA {eta/60:.1f}min"
             )
-    print(f"✅ Factors done: {fac_ok} ok, {fac_fail} fail, {time.time() - fac_start:.0f}s")
+    print(
+        f"✅ Factors done: {fac_ok} ok, {fac_fail} fail, {skipped} skipped, {time.time() - fac_start:.0f}s"
+    )
 
     print(f"\n🎉 All done in {time.time() - start_ts:.0f}s")
 

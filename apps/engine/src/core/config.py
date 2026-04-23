@@ -276,13 +276,19 @@ def get_universe(name: str) -> List[str]:
     raise ValueError(f"Unknown universe: {name}. Allowed: {sorted(UNIVERSE_NAMES)}")
 
 
-def get_bulk_ingest_universe() -> List[str]:
-    """Bulk 수집 대상: Russell 1000 ∪ Russell 2000 ∪ NASDAQ 100 ∪ SPY.
-    R1000 ∪ R2000 = Russell 3000 (대형 + 소형 전체). NASDAQ 100에서 R3000에 없는 외국 ADR 등 보충.
-    SPY는 백테스트 벤치마크 용도."""
-    combined = set(fetch_russell1000()) | set(fetch_russell2000()) | set(fetch_nasdaq100())
-    combined.add("SPY")
-    return sorted(combined)
+def get_all_ingest_universe() -> List[str]:
+    """Bulk 기본 수집 대상 — 미국 + 국내 전체.
+    미국: Russell 1000 ∪ Russell 2000 ∪ NASDAQ 100 ∪ SPY (R3000 커버 + ADR 보충 + 벤치마크)
+    국내: KRX 350 (KOSPI 200 + KOSDAQ 150)
+    """
+    us = (
+        set(fetch_russell1000())
+        | set(fetch_russell2000())
+        | set(fetch_nasdaq100())
+        | {"SPY"}
+    )
+    kr = set(fetch_krx350())
+    return sorted(us | kr)
 
 
 @lru_cache(maxsize=1)
