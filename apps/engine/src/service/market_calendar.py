@@ -9,7 +9,7 @@ def get_last_session_date(market: str = "NASDAQ") -> str:
     장이 아직 열려 있는 날은 제외하고, 가장 최근 종가가 확정된 세션을 기준으로 삼는다.
     주말/공휴일은 자동으로 제외됨.
 
-    기본값 NASDAQ: TARGET_TICKERS 대부분이 NASDAQ 상장.
+    기본값 NASDAQ: S&P 500/NASDAQ 100 대부분이 NASDAQ 상장.
     (NYSE와 정규장 시간·공휴일은 동일하지만 시맨틱상 명시)
     """
     cal = mcal.get_calendar(market)

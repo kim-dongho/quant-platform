@@ -6,6 +6,8 @@ services:
     image: timescale/timescaledb:latest-pg14
     container_name: quant-db
     restart: always
+    # 하이퍼테이블을 여러 종목·기간으로 스캔할 때 락을 충분히 확보하기 위해 기본값 64 → 512로 상향
+    command: postgres -c max_locks_per_transaction=512
     environment:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password

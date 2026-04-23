@@ -87,7 +87,17 @@ def save_to_db(ticker: str):
                 conn.execute(stmt)
                 conn.commit()
                 print(f"✅ Saved {len(df)} rows for {ticker} ({display_name})")
-            
+
     except Exception as e:
         print(f"❌ DB Write Error for {ticker}: {e}")
         conn.rollback() # 트랜잭션 꼬임 방지
+        return
+
+    # 시세 저장이 끝나면 팩터 precompute (포트폴리오 스크리닝용)
+    try:
+        from src.service.factors import compute_factors_for_symbol
+        n = compute_factors_for_symbol(ticker)
+        if n:
+            print(f"📊 Factors updated: {n} rows for {ticker}")
+    except Exception as e:
+        print(f"⚠️ Factor computation skipped for {ticker}: {e}")

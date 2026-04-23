@@ -1,47 +1,289 @@
 import os
+from functools import lru_cache
+from typing import Dict, List
 
 # DB 접속 정보
 DB_URL = os.getenv("DB_DSN", "postgresql://user:password@db:5432/quant")
 
-# 관심 종목 리스트
-TARGET_TICKERS = [
-    # 🌌 우주/모빌리티 (Space & UAM)
-    "RKLB",  # 로켓 랩 (소형 로켓 발사 서비스 및 우주 인프라)
-    "ASTS",  # AST 스페이스모바일 (우주 기반 저궤도 위성 통신망)
-    "LUNR",  # 인튜이티브 머신스 (달 착륙선 및 달 탐사 인프라)
-    "RDW",   # 레드와이어 (우주 제조 및 인프라 부품)
-    "SPCE",  # 버진 갤러틱 (상업용 우주 관광 서비스)
-    "JOBY",  # 조비 에비에이션 (수직이착륙 전기비행기, UAM 선두주자)
-    "ACHR",  # 아처 에비에이션 (전기 수직이착륙기 개발 및 에어택시)
-
-    # 🤖 AI/양자 (AI & Quantum Computing)
-    "PLTR",  # 팔란티어 (군사 및 기업용 빅데이터 분석 소프트웨어)
-    "IONQ",  # 아이온큐 (양자 컴퓨팅 하드웨어 및 소프트웨어 개발)
-    "QUBT",  # 퀀텀 컴퓨팅 Inc (양자 컴퓨팅 최적화 솔루션)
-    "BBAI",  # 빅베어.ai (정부 및 기업용 의사결정 지원 AI 시스템)
-    "SMCI",  # 슈퍼마이크로 컴퓨터 (AI 가속기에 최적화된 고성능 서버 구축)
-    "RGTI",  # 리게티 컴퓨팅 (양자 컴퓨팅 순수 플레이어)
-
-    # ⚡ 반도체 (Semiconductors)
-    "NVDA",  # 엔비디아 (AI 연산용 GPU 시장 압도적 1위)
-    "AMD",   # AMD (CPU 및 GPU 설계, 엔비디아의 주요 경쟁자)
-    "ARM",   # ARM 홀딩스 (전 세계 모바일 및 저전력 반도체 설계 아키텍처 점유율 1위)
-    "TSM",   # TSMC (반도체 위탁 생산 세계 1위 파운드리 기업)
-    "AVGO",  # 브로드컴 (유무선 통신 및 인프라용 반도체 솔루션)
-    "MU",    # 마이크론 테크놀로지 (고성능 HBM 등 메모리 반도체 전문)
-    "SNDK",  # 샌디스크 (낸드 플래시 및 HDD/SSD 제조)
-
-    # 💰 코인/핀테크 (Crypto & Fintech)
-    "MSTR",  # 마이크로스트래티지 (비트코인을 가장 많이 보유한 기업, 비트코인 레버리지 성격)
-    "COIN",  # 코인베이스 (미국 최대 암호화폐 거래소)
-    "HOOD",  # 로빈후드 (미국 MZ세대가 애용하는 주식 및 코인 거래 앱)
-
-    # 🚗 빅테크/EV (Big Tech & EV)
-    "TSLA",  # 테슬라 (전기차, 자율주행 기술 및 에너지 저장 솔루션)
-    "RIVN",  # 리비안 (전기 픽업트럭 및 SUV 전문 제조사)
-    "LCID",  # 루시드 그룹 (고급형 럭셔리 전기차 제조사)
-    "AAPL",  # 애플 (아이폰 생태계 및 서비스 사업 기반의 빅테크)
-    "MSFT",  # 마이크로소프트 (윈도우, 클라우드 Azure 및 오픈AI 투자 주체)
-    "GOOGL", # 알파벳 (구글 검색 엔진, 유튜브 및 제미나이 AI 모델 개발)
-    "META"   # 메타 (페이스북, 인스타그램 및 메타버스 플랫폼)
+# ---------------------------------------------------------------------------
+# 개인 Watchlist — 하드코딩된 테마 종목 (유지)
+# ---------------------------------------------------------------------------
+WATCHLIST: List[str] = [
+    # 우주/모빌리티
+    "RKLB", "ASTS", "LUNR", "RDW", "SPCE", "JOBY", "ACHR",
+    # AI/양자
+    "PLTR", "IONQ", "QUBT", "BBAI", "SMCI", "RGTI",
+    # 반도체
+    "NVDA", "AMD", "ARM", "TSM", "AVGO", "MU", "SNDK",
+    # 코인/핀테크
+    "MSTR", "COIN", "HOOD",
+    # 빅테크/EV
+    "TSLA", "RIVN", "LCID", "AAPL", "MSFT", "GOOGL", "META",
 ]
+
+# 기존 코드 호환성용 alias
+TARGET_TICKERS = WATCHLIST
+
+
+# ---------------------------------------------------------------------------
+# S&P 500 / NASDAQ 100 — Wikipedia 테이블에서 동적 파싱
+# ---------------------------------------------------------------------------
+def _normalize_ticker(sym: str) -> str:
+    """Wikipedia 표기를 yfinance 표기로 변환 (예: BRK.B → BRK-B)."""
+    return sym.strip().replace(".", "-").upper()
+
+
+def _fetch_wiki_html(url: str) -> str:
+    """Wikipedia는 User-Agent 없는 요청을 403 거부. requests로 UA 붙여서 가져옴."""
+    import requests
+
+    r = requests.get(
+        url,
+        timeout=30,
+        headers={"User-Agent": "QuantPlatform/1.0 (github.com/kim-dongho/quant-platform)"},
+    )
+    r.raise_for_status()
+    return r.text
+
+
+@lru_cache(maxsize=1)
+def fetch_sp500() -> List[str]:
+    """Wikipedia의 'List of S&P 500 companies' 테이블에서 500개 티커 추출."""
+    import pandas as pd
+    from io import StringIO
+
+    print("📥 Fetching S&P 500 constituents from Wikipedia...")
+    url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+    html = _fetch_wiki_html(url)
+    tables = pd.read_html(StringIO(html))
+    # 첫 테이블이 현재 구성, 컬럼명은 'Symbol'
+    df = tables[0]
+    symbols = df["Symbol"].astype(str).tolist()
+    result = sorted({_normalize_ticker(s) for s in symbols if s})
+    print(f"   → {len(result)} S&P 500 symbols")
+    return result
+
+
+@lru_cache(maxsize=1)
+def fetch_nasdaq100() -> List[str]:
+    """Wikipedia의 'Nasdaq-100' 테이블에서 100개 티커 추출."""
+    import pandas as pd
+    from io import StringIO
+
+    print("📥 Fetching NASDAQ 100 constituents from Wikipedia...")
+    url = "https://en.wikipedia.org/wiki/Nasdaq-100"
+    html = _fetch_wiki_html(url)
+    tables = pd.read_html(StringIO(html))
+    # 구성 종목 테이블 찾기 (Ticker 또는 Symbol 컬럼 존재)
+    for t in tables:
+        cols = set(map(str, t.columns))
+        if "Ticker" in cols:
+            result = sorted({_normalize_ticker(s) for s in t["Ticker"].astype(str).tolist() if s})
+            print(f"   → {len(result)} NASDAQ 100 symbols")
+            return result
+        if "Symbol" in cols:
+            result = sorted({_normalize_ticker(s) for s in t["Symbol"].astype(str).tolist() if s})
+            print(f"   → {len(result)} NASDAQ 100 symbols")
+            return result
+    raise RuntimeError("Could not find NASDAQ 100 components table on Wikipedia")
+
+
+def _parse_csv_row(line: str) -> List[str]:
+    """쉼표 구분 한 줄을 필드로 분할하되 큰따옴표 내부의 쉼표는 보호."""
+    import csv
+    from io import StringIO
+
+    return next(csv.reader(StringIO(line)))
+
+
+def _fetch_ishares_holdings_raw(url: str, etf_name: str, retries: int = 3) -> List[Dict[str, str]]:
+    """iShares ETF holdings CSV에서 [{'ticker': ..., 'name': ...}, ...] 형태로 파싱."""
+    import time as _time
+
+    import requests
+
+    print(f"📥 Fetching {etf_name} holdings from iShares...")
+    last_err = None
+    for attempt in range(1, retries + 1):
+        try:
+            r = requests.get(url, timeout=60, headers={"User-Agent": "Mozilla/5.0"})
+            r.raise_for_status()
+            break
+        except requests.exceptions.RequestException as e:
+            last_err = e
+            if attempt < retries:
+                wait = 2 ** attempt
+                print(f"   ⚠️ attempt {attempt} failed ({e}); retrying in {wait}s...")
+                _time.sleep(wait)
+            else:
+                raise RuntimeError(f"Failed to fetch {etf_name} after {retries} attempts") from last_err
+
+    lines = r.text.splitlines()
+    header_idx = next((i for i, line in enumerate(lines) if line.startswith("Ticker,")), None)
+    if header_idx is None:
+        raise RuntimeError(f"Could not locate 'Ticker' header in {etf_name} CSV")
+
+    header_cols = _parse_csv_row(lines[header_idx])
+    ticker_i = header_cols.index("Ticker") if "Ticker" in header_cols else 0
+    name_i = header_cols.index("Name") if "Name" in header_cols else 1
+
+    rows: List[Dict[str, str]] = []
+    for line in lines[header_idx + 1:]:
+        if not line.strip():
+            break
+        try:
+            fields = _parse_csv_row(line)
+        except Exception:
+            continue
+        if len(fields) <= max(ticker_i, name_i):
+            continue
+        ticker = fields[ticker_i].strip().strip('"')
+        name = fields[name_i].strip().strip('"') if name_i < len(fields) else ""
+        if not ticker:
+            continue
+        cleaned = ticker.replace("-", "").replace(".", "")
+        if 1 <= len(ticker) <= 5 and cleaned.isalnum():
+            rows.append({"ticker": _normalize_ticker(ticker), "name": name})
+    return rows
+
+
+def _fetch_ishares_etf_holdings(url: str, etf_name: str, retries: int = 3) -> List[str]:
+    """iShares ETF 공식 holdings CSV에서 종목 티커 추출 (기존 API 유지)."""
+    rows = _fetch_ishares_holdings_raw(url, etf_name, retries)
+    result = sorted({r["ticker"] for r in rows})
+    print(f"   → {len(result)} {etf_name} symbols")
+    return result
+
+
+@lru_cache(maxsize=1)
+def fetch_russell1000() -> List[str]:
+    """iShares IWB ETF (Russell 1000 대형주 추종) holdings CSV."""
+    url = (
+        "https://www.ishares.com/us/products/239707/ishares-russell-1000-etf/"
+        "?fileType=csv&fileName=IWB_holdings&dataType=fund"
+    )
+    return _fetch_ishares_etf_holdings(url, "Russell 1000 (IWB)")
+
+
+@lru_cache(maxsize=1)
+def fetch_russell2000() -> List[str]:
+    """iShares IWM ETF (Russell 2000 소형주 추종) holdings CSV."""
+    url = (
+        "https://www.ishares.com/us/products/239710/ishares-russell-2000-etf/"
+        "?fileType=csv&fileName=IWM_holdings&dataType=fund"
+    )
+    return _fetch_ishares_etf_holdings(url, "Russell 2000 (IWM)")
+
+
+def fetch_russell3000() -> List[str]:
+    """Russell 3000 = Russell 1000 ∪ Russell 2000 (별도 API 호출 불필요)."""
+    return sorted(set(fetch_russell1000()) | set(fetch_russell2000()))
+
+
+# ---------------------------------------------------------------------------
+# Universe lookup — 통일된 진입점
+# ---------------------------------------------------------------------------
+UNIVERSE_NAMES = {
+    "watchlist",
+    "sp500",
+    "nasdaq100",
+    "russell1000",
+    "russell2000",
+    "russell3000",
+}
+
+
+def get_universe(name: str) -> List[str]:
+    if name == "watchlist":
+        return list(WATCHLIST)
+    if name == "sp500":
+        return fetch_sp500()
+    if name == "nasdaq100":
+        return fetch_nasdaq100()
+    if name == "russell1000":
+        return fetch_russell1000()
+    if name == "russell2000":
+        return fetch_russell2000()
+    if name == "russell3000":
+        return fetch_russell3000()
+    raise ValueError(f"Unknown universe: {name}. Allowed: {sorted(UNIVERSE_NAMES)}")
+
+
+def get_bulk_ingest_universe() -> List[str]:
+    """Bulk 수집 대상: Russell 1000 ∪ Russell 2000 ∪ NASDAQ 100 ∪ SPY.
+    R1000 ∪ R2000 = Russell 3000 (대형 + 소형 전체). NASDAQ 100에서 R3000에 없는 외국 ADR 등 보충.
+    SPY는 백테스트 벤치마크 용도."""
+    combined = set(fetch_russell1000()) | set(fetch_russell2000()) | set(fetch_nasdaq100())
+    combined.add("SPY")
+    return sorted(combined)
+
+
+@lru_cache(maxsize=1)
+def get_company_names_map() -> Dict[str, str]:
+    """모든 유니버스 소스에서 {ticker: company_name} 맵을 만든다.
+    iShares IWB/IWM은 'Name' 컬럼, Wikipedia SP500/NASDAQ100 테이블은 'Security'/'Company' 컬럼 사용.
+    중복 ticker는 먼저 들어온 값 유지.
+    """
+    import pandas as pd
+    from io import StringIO
+
+    name_map: Dict[str, str] = {}
+
+    def _merge(pairs):
+        for t, n in pairs:
+            if not t or not n:
+                continue
+            name_map.setdefault(t, n)
+
+    # 1) iShares IWB / IWM — 먼저 넣어 덮어쓰기 우선순위 확보
+    try:
+        iwb_url = (
+            "https://www.ishares.com/us/products/239707/ishares-russell-1000-etf/"
+            "?fileType=csv&fileName=IWB_holdings&dataType=fund"
+        )
+        rows = _fetch_ishares_holdings_raw(iwb_url, "Russell 1000 (IWB) names")
+        _merge((r["ticker"], r["name"]) for r in rows)
+    except Exception as e:
+        print(f"   ⚠️ IWB names fetch skipped: {e}")
+
+    try:
+        iwm_url = (
+            "https://www.ishares.com/us/products/239710/ishares-russell-2000-etf/"
+            "?fileType=csv&fileName=IWM_holdings&dataType=fund"
+        )
+        rows = _fetch_ishares_holdings_raw(iwm_url, "Russell 2000 (IWM) names")
+        _merge((r["ticker"], r["name"]) for r in rows)
+    except Exception as e:
+        print(f"   ⚠️ IWM names fetch skipped: {e}")
+
+    # 2) Wikipedia SP500 — 'Symbol' + 'Security'
+    try:
+        html = _fetch_wiki_html("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies")
+        df = pd.read_html(StringIO(html))[0]
+        _merge(
+            (_normalize_ticker(str(s)), str(n))
+            for s, n in zip(df["Symbol"], df["Security"])
+        )
+    except Exception as e:
+        print(f"   ⚠️ SP500 Wiki names fetch skipped: {e}")
+
+    # 3) Wikipedia NASDAQ 100 — 'Ticker' + 'Company'
+    try:
+        html = _fetch_wiki_html("https://en.wikipedia.org/wiki/Nasdaq-100")
+        tables = pd.read_html(StringIO(html))
+        for t in tables:
+            cols = set(map(str, t.columns))
+            if "Ticker" in cols and "Company" in cols:
+                _merge(
+                    (_normalize_ticker(str(s)), str(n))
+                    for s, n in zip(t["Ticker"], t["Company"])
+                )
+                break
+    except Exception as e:
+        print(f"   ⚠️ NASDAQ 100 Wiki names fetch skipped: {e}")
+
+    # 벤치마크 ETF 이름 수동 추가
+    name_map.setdefault("SPY", "SPDR S&P 500 ETF Trust")
+
+    print(f"📛 Collected {len(name_map)} company names across sources")
+    return name_map

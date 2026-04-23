@@ -29,6 +29,10 @@ def init_db():
                 conn.execute(text("SELECT create_hypertable('market_data', 'time', if_not_exists => TRUE);"))
             except Exception:
                 pass
+            try:
+                conn.execute(text("SELECT create_hypertable('factors', 'time', if_not_exists => TRUE);"))
+            except Exception:
+                pass
             
             conn.commit()
         print("✅ Database schema initialized successfully.")
