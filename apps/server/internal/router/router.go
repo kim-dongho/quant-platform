@@ -35,4 +35,10 @@ func SetupRoutes(app *fiber.App) {
 	paper.Post("/orders", controller.PlacePaperOrder)
 	paper.Get("/orders", controller.GetPaperOrders)
 	paper.Get("/quote/:symbol", controller.GetPaperQuote)
+
+	// 라이브 전략 (전략 페이지에서 활성화된 룰을 모의계좌 위에 엮음)
+	live := api.Group("/live")
+	live.Get("/strategy", controller.GetLiveStrategy)
+	live.Post("/strategy", controller.UpsertLiveStrategy)
+	live.Delete("/strategy", controller.StopLiveStrategy)
 }

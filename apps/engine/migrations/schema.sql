@@ -44,3 +44,23 @@ CREATE TABLE IF NOT EXISTS portfolio_rules (
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now()
 );
+
+-- 모의/실전 라이브 전략 (활성 1개 제한, 자동 교체 방식)
+CREATE TABLE IF NOT EXISTS live_strategies (
+    id                SERIAL PRIMARY KEY,
+    name              TEXT NOT NULL DEFAULT '기본 전략',
+    universe          TEXT NOT NULL,
+    clauses           JSONB NOT NULL,
+    max_positions     INT  NOT NULL DEFAULT 10,
+    exit_policy       JSONB,
+    is_active         BOOLEAN NOT NULL DEFAULT FALSE,
+    mode              TEXT NOT NULL DEFAULT 'paper',
+    position_size_krw BIGINT NOT NULL DEFAULT 1000000,
+    last_rebalance_at TIMESTAMPTZ,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- 활성 전략은 동시에 1개만 허용 (partial unique index)
+CREATE UNIQUE INDEX IF NOT EXISTS ux_live_strategies_active
+    ON live_strategies ((TRUE)) WHERE is_active;

@@ -62,6 +62,116 @@
                 }
             }
         },
+        "/live/strategy": {
+            "get": {
+                "description": "활성 전략이 없으면 null 을 반환합니다.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "live"
+                ],
+                "summary": "현재 활성화된 라이브 전략 조회",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "기존 활성 전략이 있으면 자동으로 비활성화하고 새 전략을 활성화합니다. 응답의 replaced 필드에 교체된 전략 정보가 포함됩니다.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "live"
+                ],
+                "summary": "라이브 전략 활성화/교체",
+                "parameters": [
+                    {
+                        "description": "전략 payload (name, universe, clauses, max_positions, exit_policy, position_size_krw)",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "현재 활성 전략을 비활성화합니다. 활성 전략이 없으면 stopped=false 를 반환합니다.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "live"
+                ],
+                "summary": "라이브 전략 중지",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/paper/balance": {
             "get": {
                 "description": "KIS Open API로 잔고와 보유종목을 조회합니다. 모의/실전 분기는 엔진의 KIS_MODE 환경변수가 결정합니다.",

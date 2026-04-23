@@ -5,9 +5,14 @@ from src.service.ingest import save_to_db
 from src.service.ingest_1m import save_1m_to_db
 from src.service.market_calendar import get_last_session_date
 from src.service.kis_client import KisError, get_kis_client
+from src.service.live_strategy import (
+    get_active_strategy,
+    stop_active_strategy,
+    upsert_active_strategy,
+)
 from src.service.portfolio_backtest import run_portfolio_backtest
 from src.service.screener import ScreenError, run_screen
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Literal, Optional
 
 router = APIRouter()
 
@@ -191,6 +196,71 @@ def get_paper_quote(symbol: str):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         print(f"❌ KIS quote failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class LiveStrategyRequest(BaseModel):
+    """라이브 전략 upsert 요청.
+
+    clauses/exit_policy 구조는 /portfolio/backtest 와 동일해서 그쪽 모델 재사용.
+    """
+    name: str = "기본 전략"
+    universe: str
+    clauses: List[ScreenClause] = []
+    max_positions: int = 10
+    exit_policy: Optional[ExitPolicyModel] = None
+    position_size_krw: int = 1_000_000
+    mode: Literal["paper"] = "paper"
+
+
+def _exit_policy_to_dict(p: Optional[ExitPolicyModel]) -> Optional[Dict[str, Any]]:
+    if p is None:
+        return None
+    return {
+        "stop_loss_pct": p.stop_loss_pct,
+        "take_profit_pct": p.take_profit_pct,
+        "trailing_stop_pct": p.trailing_stop_pct,
+        "time_exit_days": p.time_exit_days,
+        "signal_exit_clauses": [c.model_dump() for c in p.signal_exit_clauses],
+    }
+
+
+@router.get("/live/strategy")
+def get_live_strategy():
+    """현재 활성화된 라이브 전략 1개를 반환. 없으면 null."""
+    try:
+        return get_active_strategy()
+    except Exception as e:
+        print(f"❌ get_live_strategy failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/live/strategy")
+def upsert_live_strategy(req: LiveStrategyRequest):
+    """라이브 전략을 활성화. 기존 활성 전략이 있으면 자동으로 교체."""
+    try:
+        payload = {
+            "name": req.name,
+            "universe": req.universe,
+            "clauses": [c.model_dump() for c in req.clauses],
+            "max_positions": req.max_positions,
+            "exit_policy": _exit_policy_to_dict(req.exit_policy),
+            "position_size_krw": req.position_size_krw,
+            "mode": req.mode,
+        }
+        return upsert_active_strategy(payload)
+    except Exception as e:
+        print(f"❌ upsert_live_strategy failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/live/strategy")
+def delete_live_strategy():
+    """현재 활성 전략을 중지."""
+    try:
+        return stop_active_strategy()
+    except Exception as e:
+        print(f"❌ stop_live_strategy failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
