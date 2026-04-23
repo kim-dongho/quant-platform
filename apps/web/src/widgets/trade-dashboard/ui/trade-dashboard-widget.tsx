@@ -19,9 +19,9 @@ export const TradeDashboardWidget = () => {
         <span className="material-symbols-outlined text-primary text-[22px]">
           account_balance_wallet
         </span>
-        <span className="text-on-surface text-[18px] font-semibold">Paper Trading</span>
+        <span className="text-on-surface text-[18px] font-semibold">모의투자</span>
         <span className="border-outline-variant/40 text-on-surface-variant rounded-md border px-2 py-0.5 text-xs">
-          KIS 모의투자
+          한국투자증권 가상 계좌
         </span>
         <div className="ml-auto w-full max-w-xs">
           <StockSearch onSearch={setSymbol} currentSymbol={symbol} />

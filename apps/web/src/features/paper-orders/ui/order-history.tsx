@@ -29,7 +29,7 @@ export const OrderHistory = () => {
       <header className="flex items-center justify-between">
         <div className="flex flex-col gap-0.5">
           <h2 className="text-on-surface-variant text-[13px] font-semibold tracking-wider uppercase">
-            Orders Today
+            오늘 주문 내역
           </h2>
           <p className="text-on-surface-variant text-[11px]">
             오늘 접수한 주문과 체결 상태 (10초마다 갱신)
@@ -63,12 +63,12 @@ export const OrderHistory = () => {
           <table className="w-full border-separate border-spacing-0 text-sm">
             <thead>
               <tr className="text-on-surface-variant text-[10px] font-semibold tracking-wider uppercase">
-                <th className="border-outline-variant/30 border-b pr-3 pb-2 text-left">Time</th>
-                <th className="border-outline-variant/30 border-b pr-3 pb-2 text-left">Symbol</th>
-                <th className="border-outline-variant/30 border-b pr-3 pb-2 text-center">Side</th>
-                <th className="border-outline-variant/30 border-b pr-3 pb-2 text-right">Qty</th>
-                <th className="border-outline-variant/30 border-b pr-3 pb-2 text-right">Price</th>
-                <th className="border-outline-variant/30 border-b pb-2 text-center">Status</th>
+                <th className="border-outline-variant/30 border-b pr-3 pb-2 text-left">시간</th>
+                <th className="border-outline-variant/30 border-b pr-3 pb-2 text-left">종목</th>
+                <th className="border-outline-variant/30 border-b pr-3 pb-2 text-center">매매</th>
+                <th className="border-outline-variant/30 border-b pr-3 pb-2 text-right">수량</th>
+                <th className="border-outline-variant/30 border-b pr-3 pb-2 text-right">가격</th>
+                <th className="border-outline-variant/30 border-b pb-2 text-center">상태</th>
               </tr>
             </thead>
             <tbody>

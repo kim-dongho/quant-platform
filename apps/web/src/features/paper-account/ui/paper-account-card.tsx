@@ -22,7 +22,7 @@ export const PaperAccountCard = () => {
       <header className="flex items-start justify-between gap-2">
         <div className="flex flex-col gap-0.5">
           <h2 className="text-on-surface-variant text-[13px] font-semibold tracking-wider uppercase">
-            My Account
+            내 계좌
           </h2>
           {data && (
             <span className="text-on-surface-variant font-mono text-[10px]">{data.account}</span>
@@ -44,7 +44,7 @@ export const PaperAccountCard = () => {
       {isLoading && (
         <div className="text-on-surface-variant flex flex-1 flex-col items-center justify-center gap-3 text-xs">
           <Spinner size={24} />
-          <span>Loading balance...</span>
+          <span>계좌 정보 불러오는 중…</span>
         </div>
       )}
 
@@ -75,7 +75,7 @@ const SummaryBlock = ({
     <section className="bg-surface-container-low flex flex-col gap-3 rounded-md p-3">
       <div>
         <div className="text-on-surface-variant text-[10px] font-semibold tracking-wider uppercase">
-          Total Equity
+          총 평가금액
         </div>
         <div className="text-on-surface font-mono text-[22px] font-semibold tabular-nums">
           {fmtKRW(summary.total_eval)}
@@ -89,12 +89,12 @@ const SummaryBlock = ({
                 : 'text-on-surface-variant'
           }`}
         >
-          P/L {fmtKRW(summary.total_profit)}
+          평가손익 {fmtKRW(summary.total_profit)}
         </div>
       </div>
       <div className="border-outline-variant/30 grid grid-cols-2 gap-2 border-t pt-2">
-        <MiniStat label="Cash" value={fmtKRW(summary.cash)} />
-        <MiniStat label="D+2 예수" value={fmtKRW(summary.deposit_d2)} />
+        <MiniStat label="예수금" value={fmtKRW(summary.cash)} />
+        <MiniStat label="D+2 정산" value={fmtKRW(summary.deposit_d2)} />
       </div>
     </section>
   );
@@ -112,10 +112,10 @@ const HoldingsList = ({ holdings }: { holdings: PaperHolding[] }) => {
     return (
       <section className="flex min-h-[120px] flex-col gap-1.5">
         <div className="text-on-surface-variant text-[10px] font-semibold tracking-wider uppercase">
-          Holdings
+          보유 종목
         </div>
         <div className="border-outline-variant/40 text-on-surface-variant flex flex-1 items-center justify-center rounded-md border border-dashed py-6 text-center text-xs">
-          보유 종목 없음
+          아직 보유한 종목이 없어요
         </div>
       </section>
     );
@@ -123,7 +123,7 @@ const HoldingsList = ({ holdings }: { holdings: PaperHolding[] }) => {
   return (
     <section className="flex min-h-0 flex-1 flex-col gap-1.5">
       <div className="text-on-surface-variant flex items-center justify-between text-[10px] font-semibold tracking-wider uppercase">
-        <span>Holdings ({holdings.length})</span>
+        <span>보유 종목 ({holdings.length})</span>
       </div>
       <ul className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
         {holdings.map((h) => {
