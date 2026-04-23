@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"quant-server/internal/database"
 	"quant-server/internal/model"
+	"strconv"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -175,4 +177,57 @@ func GetStockList(c *fiber.Ctx) error {
 
 	// 3. JSON 응답
 	return c.JSON(response)
+}
+
+type StockSearchItem struct {
+	Symbol string `json:"symbol" example:"RKLB"`
+	Name   string `json:"name"   example:"Rocket Lab Corporation"`
+}
+
+// SearchStocks godoc
+// @Summary      종목 자동완성 검색
+// @Description  symbol 또는 회사명(영문·한국어)에 q가 포함된 종목을 랭킹 순으로 반환합니다. 순위: 완전일치 > symbol 접두사 > name 접두사 > symbol 부분일치 > name 부분일치.
+// @Tags         stocks
+// @Produce      json
+// @Param        q      query     string  true   "검색어 (symbol 또는 회사명 일부)"
+// @Param        limit  query     int     false  "최대 반환 개수 (기본 20, 최대 100)"
+// @Success      200    {array}   StockSearchItem
+// @Failure      500    {object}  map[string]string
+// @Router       /stocks/search [get]
+func SearchStocks(c *fiber.Ctx) error {
+	q := strings.TrimSpace(c.Query("q"))
+	if q == "" {
+		return c.JSON([]StockSearchItem{})
+	}
+
+	limit, _ := strconv.Atoi(c.Query("limit", "20"))
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+
+	prefix := q + "%"
+	contains := "%" + q + "%"
+
+	items := make([]StockSearchItem, 0)
+	err := database.DB.Raw(`
+		SELECT symbol, name
+		FROM stocks
+		WHERE UPPER(symbol) LIKE UPPER(?) OR name ILIKE ?
+		ORDER BY
+		  CASE
+		    WHEN UPPER(symbol) = UPPER(?)      THEN 1
+		    WHEN UPPER(symbol) LIKE UPPER(?)   THEN 2
+		    WHEN name ILIKE ?                  THEN 3
+		    WHEN UPPER(symbol) LIKE UPPER(?)   THEN 4
+		    ELSE 5
+		  END,
+		  LENGTH(symbol),
+		  symbol
+		LIMIT ?
+	`, contains, contains, q, prefix, prefix, contains, limit).Scan(&items).Error
+
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.JSON(items)
 }

@@ -18,6 +18,7 @@ func SetupRoutes(app *fiber.App) {
 	stocks.Get("/:symbol/history", controller.GetStockHistory)
 	stocks.Get("/:symbol/intraday", controller.GetIntradayCandles)
 	stocks.Get("/list", controller.GetStockList)
+	stocks.Get("/search", controller.SearchStocks)
 
 	// 포트폴리오(유니버스 스크리닝) 관련 경로
 	portfolio := api.Group("/portfolio")
