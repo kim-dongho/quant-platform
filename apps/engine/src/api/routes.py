@@ -86,23 +86,44 @@ def screen_portfolio(req: ScreenRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class ExitPolicyModel(BaseModel):
+    """청산 정책 — 모든 필드는 선택적이며 OR 결합으로 평가."""
+    stop_loss_pct: Optional[float] = None        # 예: -5.0 (-5%)
+    take_profit_pct: Optional[float] = None      # 예: 10.0 (+10%)
+    trailing_stop_pct: Optional[float] = None    # 예: -8.0 (최고가 대비 -8%)
+    time_exit_days: Optional[int] = None         # 보유 달력일 상한
+    signal_exit_clauses: List[ScreenClause] = []
+
+
 class PortfolioBacktestRequest(BaseModel):
     universe: str = "sp500"
     clauses: List[ScreenClause] = []
     max_positions: int = 10
     start_date: Optional[str] = None
     end_date: Optional[str] = None
+    exit_policy: Optional[ExitPolicyModel] = None
 
 
 @router.post("/portfolio/backtest")
 def portfolio_backtest_api(req: PortfolioBacktestRequest):
     try:
+        exit_policy_dict = None
+        if req.exit_policy is not None:
+            p = req.exit_policy
+            exit_policy_dict = {
+                "stop_loss_pct": p.stop_loss_pct,
+                "take_profit_pct": p.take_profit_pct,
+                "trailing_stop_pct": p.trailing_stop_pct,
+                "time_exit_days": p.time_exit_days,
+                "signal_exit_clauses": [c.model_dump() for c in p.signal_exit_clauses],
+            }
         return run_portfolio_backtest(
             universe=req.universe,
             clauses=[c.model_dump() for c in req.clauses],
             max_positions=req.max_positions,
             start_date=req.start_date,
             end_date=req.end_date,
+            exit_policy=exit_policy_dict,
         )
     except ScreenError as e:
         raise HTTPException(status_code=400, detail=str(e))

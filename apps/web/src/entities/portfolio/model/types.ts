@@ -35,16 +35,51 @@ export interface ScreenResult {
   candidates: Candidate[];
 }
 
+export interface ExitPolicy {
+  stop_loss_pct?: number | null;
+  take_profit_pct?: number | null;
+  trailing_stop_pct?: number | null;
+  time_exit_days?: number | null;
+  signal_exit_clauses?: Clause[];
+}
+
+export type ExitReason =
+  | 'stop_loss'
+  | 'take_profit'
+  | 'trailing_stop'
+  | 'time_exit'
+  | 'signal_exit';
+
+export interface Trade {
+  symbol: string;
+  entry_date: string;
+  exit_date: string;
+  entry_price: number;
+  exit_price: number;
+  return_pct: number;
+  hold_days: number;
+  exit_reason: ExitReason;
+}
+
+export interface BacktestMetrics {
+  cagr: number;
+  mdd: number;
+  sharpe: number;
+  num_trades: number;
+  win_rate: number;
+  avg_hold_days: number;
+  profit_factor: number;
+}
+
 export interface PortfolioBacktestResult {
   dates: string[];
   equity: { time: string; value: number }[];
   benchmark: { time: string; value: number }[];
-  metrics: {
-    cagr: number;
-    mdd: number;
-    sharpe: number;
-  };
-  final_positions: string[];
+  benchmark_symbol?: string;
+  benchmark_label?: string;
+  metrics: BacktestMetrics;
+  final_positions: { symbol: string; name: string }[];
+  trades: Trade[];
   start_date?: string;
   end_date?: string;
   note?: string;

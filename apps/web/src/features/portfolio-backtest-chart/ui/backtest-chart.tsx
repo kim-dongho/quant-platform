@@ -56,7 +56,7 @@ export const BacktestChart = ({ result, isLoading }: Props) => {
         color: '#64748b',
         lineWidth: 1,
         lineStyle: LineStyle.Dashed,
-        title: 'SPY',
+        title: result.benchmark_label ?? '벤치마크',
       });
       benchSeries.setData(result.benchmark.map((p) => ({ time: p.time as Time, value: p.value })));
     }
@@ -81,12 +81,13 @@ export const BacktestChart = ({ result, isLoading }: Props) => {
   }, [result]);
 
   return (
-    <div className="border-outline-variant/30 bg-surface-container-lowest flex min-h-0 flex-1 flex-col gap-3 rounded-xl border p-5">
+    <div className="border-outline-variant/30 bg-surface-container-lowest flex flex-col gap-3 rounded-xl border p-5">
       <div className="flex items-start justify-between gap-4">
         <div className="flex flex-col gap-1">
-          <h2 className="text-on-surface text-[15px] font-semibold">Portfolio Growth</h2>
+          <h2 className="text-on-surface text-[15px] font-semibold">누적 수익률</h2>
           <p className="text-on-surface-variant text-[11px]">
-            이 룰로 매일 스크리닝 + 리밸런싱한 과거 성과 · SPY 벤치마크 비교
+            이 조건대로 매일 종목을 바꿔가며 운용했다면 자산이 어떻게 변했을지 · 점선은
+            벤치마크(지수 ETF)
           </p>
         </div>
         {result && (
@@ -97,15 +98,15 @@ export const BacktestChart = ({ result, isLoading }: Props) => {
       </div>
 
       {isLoading && (
-        <div className="text-on-surface-variant flex min-h-[320px] flex-1 flex-col items-center justify-center gap-3 text-xs">
+        <div className="text-on-surface-variant flex h-[420px] flex-col items-center justify-center gap-3 text-xs">
           <Spinner size={32} />
-          <span>Running backtest... (수 초 소요)</span>
+          <span>시뮬레이션 계산 중… (수 초 소요)</span>
         </div>
       )}
 
       {!isLoading && !result && (
-        <div className="border-outline-variant/40 text-on-surface-variant flex min-h-[320px] flex-1 items-center justify-center rounded-md border border-dashed text-xs">
-          Run Simulation으로 포트폴리오 성과를 확인하세요
+        <div className="border-outline-variant/40 text-on-surface-variant flex h-[420px] items-center justify-center rounded-md border border-dashed text-xs">
+          시뮬레이션 실행 버튼을 누르면 과거 성과가 표시됩니다
         </div>
       )}
 
@@ -114,7 +115,7 @@ export const BacktestChart = ({ result, isLoading }: Props) => {
       )}
 
       {!isLoading && result && result.equity.length === 0 && (
-        <div className="border-outline-variant/40 text-on-surface-variant flex min-h-[320px] flex-1 items-center justify-center rounded-md border border-dashed text-center text-xs">
+        <div className="border-outline-variant/40 text-on-surface-variant flex h-[420px] items-center justify-center rounded-md border border-dashed text-center text-xs">
           {result.note ?? '데이터가 부족합니다'}
         </div>
       )}
