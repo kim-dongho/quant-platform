@@ -4,6 +4,7 @@ import { Inter } from 'next/font/google';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
 
 import CustomQueryProvider from '@/shared/api/custom-query-provider';
+import { DialogProvider } from '@/shared/ui/dialog/dialog-provider';
 
 import './globals.css';
 
@@ -36,7 +37,9 @@ export default function RootLayout({
       </head>
       <body className={`${inter.variable} antialiased`}>
         <CustomQueryProvider>
-          <NuqsAdapter>{children}</NuqsAdapter>
+          <NuqsAdapter>
+            <DialogProvider>{children}</DialogProvider>
+          </NuqsAdapter>
         </CustomQueryProvider>
       </body>
     </html>
