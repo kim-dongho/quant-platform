@@ -20,7 +20,6 @@ export const usePaperBalanceQuery = (options?: { enabled?: boolean; refetchMs?: 
 
 /**
  * 국내주식 현재가. symbol이 6자리 숫자(선택적 .KS/.KQ suffix)일 때만 호출.
- * 기본 5s 폴링 — TradeForm 가격 표시에 사용.
  */
 export const usePaperQuoteQuery = (
   symbol: string,

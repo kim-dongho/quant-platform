@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 
+import { LiveStrategyToggle } from '@/features/live-strategy-toggle/ui/live-strategy-toggle';
 import { BacktestChart } from '@/features/portfolio-backtest-chart/ui/backtest-chart';
 import { BacktestMetrics } from '@/features/portfolio-backtest-chart/ui/backtest-metrics';
 import { CandidatesTable } from '@/features/portfolio-candidates/ui/candidates-table';
@@ -68,6 +69,7 @@ export default function PortfolioPage() {
             <span className="material-symbols-outlined text-[16px]">play_arrow</span>
             {isRunning ? '실행 중…' : '시뮬레이션 실행'}
           </button>
+          <LiveStrategyToggle config={config} exitPolicy={exitPolicy} disabled={isRunning} />
         </div>
       </header>
 
