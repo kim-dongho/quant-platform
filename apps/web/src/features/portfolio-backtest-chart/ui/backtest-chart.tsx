@@ -6,6 +6,8 @@ import { ColorType, IChartApi, LineStyle, Time, createChart } from 'lightweight-
 
 import type { PortfolioBacktestResult } from '@/entities/portfolio/model/types';
 
+import { Spinner } from '@/shared/ui/spinner';
+
 interface Props {
   result: PortfolioBacktestResult | null;
   isLoading: boolean;
@@ -56,9 +58,7 @@ export const BacktestChart = ({ result, isLoading }: Props) => {
         lineStyle: LineStyle.Dashed,
         title: 'SPY',
       });
-      benchSeries.setData(
-        result.benchmark.map((p) => ({ time: p.time as Time, value: p.value })),
-      );
+      benchSeries.setData(result.benchmark.map((p) => ({ time: p.time as Time, value: p.value })));
     }
 
     chart.timeScale().fitContent();
@@ -81,39 +81,40 @@ export const BacktestChart = ({ result, isLoading }: Props) => {
   }, [result]);
 
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-5">
+    <div className="border-outline-variant/30 bg-surface-container-lowest flex min-h-0 flex-1 flex-col gap-3 rounded-xl border p-5">
       <div className="flex items-start justify-between gap-4">
         <div className="flex flex-col gap-1">
-          <h2 className="text-[15px] font-semibold text-on-surface">Portfolio Growth</h2>
-          <p className="text-[11px] text-on-surface-variant">
+          <h2 className="text-on-surface text-[15px] font-semibold">Portfolio Growth</h2>
+          <p className="text-on-surface-variant text-[11px]">
             이 룰로 매일 스크리닝 + 리밸런싱한 과거 성과 · SPY 벤치마크 비교
           </p>
         </div>
         {result && (
-          <span className="shrink-0 text-[11px] text-on-surface-variant">
+          <span className="text-on-surface-variant shrink-0 text-[11px]">
             {result.start_date} → {result.end_date}
           </span>
         )}
       </div>
 
       {isLoading && (
-        <div className="flex h-[360px] items-center justify-center text-xs text-on-surface-variant">
-          Running backtest... (수 초 소요)
+        <div className="text-on-surface-variant flex min-h-[320px] flex-1 flex-col items-center justify-center gap-3 text-xs">
+          <Spinner size={32} />
+          <span>Running backtest... (수 초 소요)</span>
         </div>
       )}
 
       {!isLoading && !result && (
-        <div className="flex h-[360px] items-center justify-center rounded-md border border-dashed border-outline-variant/40 text-xs text-on-surface-variant">
+        <div className="border-outline-variant/40 text-on-surface-variant flex min-h-[320px] flex-1 items-center justify-center rounded-md border border-dashed text-xs">
           Run Simulation으로 포트폴리오 성과를 확인하세요
         </div>
       )}
 
       {!isLoading && result && result.equity.length > 0 && (
-        <div ref={containerRef} className="h-[360px] w-full" />
+        <div ref={containerRef} className="min-h-[320px] w-full flex-1" />
       )}
 
       {!isLoading && result && result.equity.length === 0 && (
-        <div className="flex h-[360px] items-center justify-center rounded-md border border-dashed border-outline-variant/40 text-center text-xs text-on-surface-variant">
+        <div className="border-outline-variant/40 text-on-surface-variant flex min-h-[320px] flex-1 items-center justify-center rounded-md border border-dashed text-center text-xs">
           {result.note ?? '데이터가 부족합니다'}
         </div>
       )}

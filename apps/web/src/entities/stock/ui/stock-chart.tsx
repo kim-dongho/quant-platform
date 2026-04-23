@@ -11,6 +11,8 @@ import {
   createChart,
 } from 'lightweight-charts';
 
+import { formatPrice, getCurrency } from '@/shared/lib/format-price';
+
 import { ChartOptions, MarketData } from '../model/stocks-common';
 
 interface Props {
@@ -18,9 +20,16 @@ interface Props {
   backtestData?: { time: string; value: number }[];
   visibleIndicators: ChartOptions;
   markers?: SeriesMarker<string>[];
+  symbol?: string;
 }
 
-export const StockChart = ({ data, backtestData = [], visibleIndicators, markers = [] }: Props) => {
+export const StockChart = ({
+  data,
+  backtestData = [],
+  visibleIndicators,
+  markers = [],
+  symbol,
+}: Props) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
 
@@ -36,6 +45,15 @@ export const StockChart = ({ data, backtestData = [], visibleIndicators, markers
 
     // 메인 차트가 확보해야 할 하단 여백 (지표 개수 * 높이)
     const mainChartBottomMargin = activePanes * paneHeight;
+
+    // 통화 기반 price format — 우측 scale의 가격 series(캔들/SMA/BB)에만 선택적으로 적용.
+    // chart-level localization은 좌측 equity 스케일의 custom formatter를 덮어쓰므로 사용하지 않는다.
+    const isKRW = getCurrency(symbol) === 'KRW';
+    const currencyPriceFormat = {
+      type: 'custom' as const,
+      minMove: isKRW ? 1 : 0.01,
+      formatter: (p: number) => formatPrice(p, symbol),
+    };
 
     // 2. 차트 생성
     const chart = createChart(chartContainerRef.current, {
@@ -72,12 +90,20 @@ export const StockChart = ({ data, backtestData = [], visibleIndicators, markers
 
     // --- 3. 시리즈 추가 ---
 
-    // (1) 수익률 라인 — 중립 다크 슬레이트 (green/red는 매매 신호 전용)
+    // (1) 수익률 라인 — 좌측 축 표기를 equity 배수가 아닌 누적 수익률(%)로 오버라이드
     if (backtestData.length > 0) {
       const strategySeries = chart.addLineSeries({
         color: '#0b1c30',
         lineWidth: 2,
         priceScaleId: 'left',
+        priceFormat: {
+          type: 'custom',
+          minMove: 0.0001,
+          formatter: (v: number) => {
+            const pct = (v - 1) * 100;
+            return `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`;
+          },
+        },
       });
       strategySeries.setData(backtestData);
       strategySeries.createPriceLine({
@@ -97,6 +123,7 @@ export const StockChart = ({ data, backtestData = [], visibleIndicators, markers
       wickUpColor: '#006c49',
       wickDownColor: '#ba1a1a',
       priceScaleId: 'right',
+      priceFormat: currencyPriceFormat,
     });
     candleSeries.setData(data as any);
 
@@ -113,6 +140,7 @@ export const StockChart = ({ data, backtestData = [], visibleIndicators, markers
           lineWidth: 2,
           priceScaleId: 'right',
           title: 'SMA Short',
+          priceFormat: currencyPriceFormat,
         });
         smaShortSeries.setData(
           data
@@ -127,6 +155,7 @@ export const StockChart = ({ data, backtestData = [], visibleIndicators, markers
           lineWidth: 2,
           priceScaleId: 'right',
           title: 'SMA Long',
+          priceFormat: currencyPriceFormat,
         });
         smaLongSeries.setData(
           data
@@ -144,6 +173,7 @@ export const StockChart = ({ data, backtestData = [], visibleIndicators, markers
           lineWidth: width,
           lineStyle: LineStyle.Solid,
           priceScaleId: 'right',
+          priceFormat: currencyPriceFormat,
         });
 
       const u = createBB('#94a3b8'),
@@ -265,7 +295,7 @@ export const StockChart = ({ data, backtestData = [], visibleIndicators, markers
       window.removeEventListener('resize', handleResize);
       chart.remove();
     };
-  }, [data, backtestData, visibleIndicators, markers]);
+  }, [data, backtestData, visibleIndicators, markers, symbol]);
 
   return <div ref={chartContainerRef} className="h-full w-full" />;
 };
