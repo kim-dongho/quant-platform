@@ -7,13 +7,19 @@ import { usePathname } from 'next/navigation';
 interface NavItem {
   href: string;
   label: string;
+  desc: string;
   icon: string;
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { href: '/backtest', label: 'Backtest', icon: 'history_edu' },
-  { href: '/portfolio', label: 'Portfolio', icon: 'pie_chart' },
-  { href: '/trade', label: 'Trade', icon: 'bolt' },
+  { href: '/backtest', label: '차트', desc: '종목 차트 보기', icon: 'candlestick_chart' },
+  { href: '/portfolio', label: '전략', desc: '조건 만들고 과거 검증', icon: 'rule' },
+  {
+    href: '/trade',
+    label: '모의투자',
+    desc: '가상 계좌로 매매',
+    icon: 'account_balance_wallet',
+  },
 ];
 
 export const SideNav = () => {
@@ -36,19 +42,22 @@ export const SideNav = () => {
               key={item.href}
               href={item.href}
               className={[
-                'm-2 flex items-center gap-3 rounded-lg px-4 py-3 text-left text-xs font-semibold tracking-wider uppercase transition-colors',
+                'm-2 flex items-start gap-3 rounded-lg px-4 py-3 text-left transition-colors',
                 isActive
                   ? 'bg-white text-blue-600 shadow-sm'
                   : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900',
               ].join(' ')}
             >
               <span
-                className="material-symbols-outlined text-[20px]"
+                className="material-symbols-outlined mt-0.5 text-[20px]"
                 style={isActive ? { fontVariationSettings: "'FILL' 1" } : undefined}
               >
                 {item.icon}
               </span>
-              {item.label}
+              <div className="flex min-w-0 flex-col">
+                <span className="text-sm font-semibold">{item.label}</span>
+                <span className="truncate text-[10px] font-normal text-slate-400">{item.desc}</span>
+              </div>
             </Link>
           );
         })}

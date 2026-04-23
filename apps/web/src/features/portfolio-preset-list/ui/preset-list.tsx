@@ -12,13 +12,13 @@ export const PresetList = ({ config, onSelect }: Props) => {
   const active = findActivePreset(config);
 
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-5">
+    <div className="border-outline-variant/30 bg-surface-container-lowest flex flex-col gap-3 rounded-xl border p-5">
       <div className="flex flex-col gap-1">
-        <h2 className="text-[13px] font-semibold tracking-wider text-on-surface-variant uppercase">
-          Presets
+        <h2 className="text-on-surface-variant text-[13px] font-semibold tracking-wider uppercase">
+          프리셋
         </h2>
-        <p className="text-[11px] text-on-surface-variant">
-          자주 쓰이는 고전 퀀트 전략 — 클릭하면 Rules에 적용됩니다
+        <p className="text-on-surface-variant text-[11px]">
+          자주 쓰이는 퀀트 전략 템플릿 — 클릭하면 아래 조건에 자동 채워집니다
         </p>
       </div>
 
@@ -49,15 +49,15 @@ export const PresetList = ({ config, onSelect }: Props) => {
                 <span className="material-symbols-outlined text-[18px]">{preset.icon}</span>
               </div>
               <div className="flex flex-1 flex-col">
-                <span className="mb-1 text-sm leading-tight font-semibold text-on-surface">
+                <span className="text-on-surface mb-1 text-sm leading-tight font-semibold">
                   {preset.name}
                 </span>
-                <span className="text-xs leading-snug text-on-surface-variant">
+                <span className="text-on-surface-variant text-xs leading-snug">
                   {preset.description}
                 </span>
               </div>
               {isActive && (
-                <span className="material-symbols-outlined text-[18px] text-primary">
+                <span className="material-symbols-outlined text-primary text-[18px]">
                   check_circle
                 </span>
               )}
