@@ -2,17 +2,23 @@ import yfinance as yf
 import pandas as pd
 from sqlalchemy import text, Table, MetaData
 from sqlalchemy.dialects.postgresql import insert
+from src.core.config import is_krx_symbol
 from src.core.database import engine
 
 metadata = MetaData()
 
 def save_to_db(ticker: str):
     """
-    yfinance를 통해 데이터를 수집하고, 
-    stocks 테이블(회사명)과 market_data 테이블(시세)을 업데이트합니다.
+    단일 종목 시세·회사명 수집 진입점. 티커 포맷을 보고 자동 분기한다.
+      - '.KS' / '.KQ' 접미사 → FinanceDataReader (국내)
+      - 그 외 → yfinance (미국)
     """
+    if is_krx_symbol(ticker):
+        from src.service.ingest_krx import save_krx_to_db
+        return save_krx_to_db(ticker)
+
     print(f"📥 Processing data for {ticker}...")
-    
+
     try:
         t = yf.Ticker(ticker)
         

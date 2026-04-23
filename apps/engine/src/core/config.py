@@ -181,6 +181,64 @@ def fetch_russell3000() -> List[str]:
 
 
 # ---------------------------------------------------------------------------
+# KRX (국내) — FinanceDataReader 기반, 시총 상위 N개로 KOSPI 200 / KOSDAQ 150 근사
+# ---------------------------------------------------------------------------
+def _krx_symbol(code: str, market_suffix: str) -> str:
+    """FDR Code + 시장 접미사 → DB 저장용 symbol. 예: 005930, 'KS' → '005930.KS'."""
+    return f"{code}.{market_suffix}"
+
+
+@lru_cache(maxsize=1)
+def _load_krx_listing():
+    """KOSPI + KOSDAQ 전체 상장 종목 스냅샷 (Code / Name / Marcap / _MARKET)."""
+    import FinanceDataReader as fdr
+    import pandas as pd
+
+    print("📥 Fetching KRX listings (KOSPI + KOSDAQ) from FinanceDataReader...")
+    kospi = fdr.StockListing("KOSPI").copy()
+    kospi["_MARKET"] = "KS"
+    kosdaq = fdr.StockListing("KOSDAQ").copy()
+    kosdaq["_MARKET"] = "KQ"
+
+    keep = ["Code", "Name", "Marcap", "_MARKET"]
+    combined = pd.concat([kospi[keep], kosdaq[keep]], ignore_index=True)
+    # 6자리 숫자 코드만 (일부 특수 종목/ETF는 다른 포맷) + 시총 있는 것만
+    combined = combined[combined["Code"].str.match(r"^\d{6}$", na=False)]
+    combined = combined.dropna(subset=["Marcap"])
+    return combined
+
+
+@lru_cache(maxsize=1)
+def fetch_kospi200() -> List[str]:
+    """KOSPI 시총 상위 200종목 (공식 KOSPI 200의 시총 근사치 — 유동주식 가중 등 세부 차이 있음)."""
+    df = _load_krx_listing()
+    kospi = df[df["_MARKET"] == "KS"].sort_values("Marcap", ascending=False).head(200)
+    result = sorted({_krx_symbol(str(c), "KS") for c in kospi["Code"]})
+    print(f"   → {len(result)} KOSPI 200 (top cap) symbols")
+    return result
+
+
+@lru_cache(maxsize=1)
+def fetch_kosdaq150() -> List[str]:
+    """KOSDAQ 시총 상위 150종목 (KOSDAQ 150의 시총 근사치)."""
+    df = _load_krx_listing()
+    kosdaq = df[df["_MARKET"] == "KQ"].sort_values("Marcap", ascending=False).head(150)
+    result = sorted({_krx_symbol(str(c), "KQ") for c in kosdaq["Code"]})
+    print(f"   → {len(result)} KOSDAQ 150 (top cap) symbols")
+    return result
+
+
+def fetch_krx350() -> List[str]:
+    """KOSPI 200 ∪ KOSDAQ 150 — 국내 대형주 통합 유니버스."""
+    return sorted(set(fetch_kospi200()) | set(fetch_kosdaq150()))
+
+
+def is_krx_symbol(symbol: str) -> bool:
+    """symbol이 한국 종목인지 (.KS / .KQ 접미사)."""
+    return symbol.endswith(".KS") or symbol.endswith(".KQ")
+
+
+# ---------------------------------------------------------------------------
 # Universe lookup — 통일된 진입점
 # ---------------------------------------------------------------------------
 UNIVERSE_NAMES = {
@@ -190,6 +248,9 @@ UNIVERSE_NAMES = {
     "russell1000",
     "russell2000",
     "russell3000",
+    "kospi200",
+    "kosdaq150",
+    "krx350",
 }
 
 
@@ -206,6 +267,12 @@ def get_universe(name: str) -> List[str]:
         return fetch_russell2000()
     if name == "russell3000":
         return fetch_russell3000()
+    if name == "kospi200":
+        return fetch_kospi200()
+    if name == "kosdaq150":
+        return fetch_kosdaq150()
+    if name == "krx350":
+        return fetch_krx350()
     raise ValueError(f"Unknown universe: {name}. Allowed: {sorted(UNIVERSE_NAMES)}")
 
 
@@ -282,8 +349,20 @@ def get_company_names_map() -> Dict[str, str]:
     except Exception as e:
         print(f"   ⚠️ NASDAQ 100 Wiki names fetch skipped: {e}")
 
+    # 4) KRX KOSPI + KOSDAQ — Code + Name
+    try:
+        df = _load_krx_listing()
+        _merge(
+            (_krx_symbol(str(c), str(m)), str(n))
+            for c, m, n in zip(df["Code"], df["_MARKET"], df["Name"])
+        )
+    except Exception as e:
+        print(f"   ⚠️ KRX names fetch skipped: {e}")
+
     # 벤치마크 ETF 이름 수동 추가
     name_map.setdefault("SPY", "SPDR S&P 500 ETF Trust")
+    name_map.setdefault("069500.KS", "KODEX 200")
+    name_map.setdefault("229200.KQ", "KODEX 코스닥150")
 
     print(f"📛 Collected {len(name_map)} company names across sources")
     return name_map

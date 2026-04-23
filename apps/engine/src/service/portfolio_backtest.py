@@ -15,7 +15,24 @@ from src.service.screener import (
 )
 
 
-BENCHMARK_SYMBOL = "SPY"
+BENCHMARK_BY_UNIVERSE: Dict[str, str] = {
+    # 미국계: S&P 500 ETF (SPY)
+    "watchlist": "SPY",
+    "sp500": "SPY",
+    "nasdaq100": "SPY",
+    "russell1000": "SPY",
+    "russell2000": "SPY",
+    "russell3000": "SPY",
+    # 국내계: KOSPI 200 ETF (KODEX 200) / KOSDAQ 150 ETF (KODEX 코스닥150)
+    "kospi200": "069500.KS",
+    "kosdaq150": "229200.KQ",
+    "krx350": "069500.KS",  # 통합 유니버스는 KOSPI 200 대표로
+}
+
+
+def _get_benchmark(universe: str) -> str:
+    """universe에 맞는 벤치마크 심볼 반환. 매핑 없으면 SPY 기본."""
+    return BENCHMARK_BY_UNIVERSE.get(universe, "SPY")
 
 
 def _ensure_benchmark_data(symbol: str) -> bool:
@@ -155,8 +172,9 @@ def run_portfolio_backtest(
     if not symbols:
         raise ScreenError("Universe is empty")
 
-    # 벤치마크(SPY) 데이터가 없으면 지금 수집 — 없으면 차트에 벤치마크 라인이 안 그려짐
-    _ensure_benchmark_data(BENCHMARK_SYMBOL)
+    # universe에 맞는 벤치마크 (미국=SPY, 국내=KODEX 200/150) 데이터가 없으면 lazy 수집
+    benchmark_symbol = _get_benchmark(universe)
+    _ensure_benchmark_data(benchmark_symbol)
 
     # 기본 기간: 최근 3년
     end = end_date or date.today().isoformat()
@@ -166,7 +184,7 @@ def run_portfolio_backtest(
         start = (datetime.fromisoformat(end).date().replace(year=datetime.fromisoformat(end).year - 3)).isoformat()
 
     factors_df = _load_factors(symbols, start, end)
-    closes = _load_closes(symbols + [BENCHMARK_SYMBOL], start, end)
+    closes = _load_closes(symbols + [benchmark_symbol], start, end)
 
     if factors_df.empty or closes.empty:
         return {
@@ -220,8 +238,8 @@ def run_portfolio_backtest(
 
     # 벤치마크: SPY 단순 buy&hold
     bench_rows: List[Dict[str, Any]] = []
-    if BENCHMARK_SYMBOL in closes.columns:
-        bench_series = closes[BENCHMARK_SYMBOL].reindex(trading_days).ffill()
+    if benchmark_symbol in closes.columns:
+        bench_series = closes[benchmark_symbol].reindex(trading_days).ffill()
         base = bench_series.iloc[0]
         if base and base > 0:
             bench_rows = [

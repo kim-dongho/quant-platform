@@ -26,7 +26,12 @@ import yfinance as yf
 from sqlalchemy import MetaData, Table, text
 from sqlalchemy.dialects.postgresql import insert
 
-from src.core.config import get_bulk_ingest_universe, get_company_names_map
+from src.core.config import (
+    get_bulk_ingest_universe,
+    get_company_names_map,
+    get_universe,
+    is_krx_symbol,
+)
 from src.core.database import engine
 from src.service.factors import compute_factors_for_symbol
 
@@ -196,11 +201,62 @@ def bulk_fetch(symbols: List[str], start: Optional[str], period: Optional[str]) 
     return yf.download(**kwargs)
 
 
+def _fetch_krx_single(symbol: str, start: str) -> Optional[pd.DataFrame]:
+    """단일 KRX 종목을 FDR로 수집. OHLCV+Date index의 DataFrame 반환 (없으면 None)."""
+    import FinanceDataReader as fdr
+
+    code = symbol.rsplit(".", 1)[0]
+    try:
+        df = fdr.DataReader(code, start)
+    except Exception as e:
+        print(f"    ❌ FDR {symbol}: {e}")
+        return None
+    if df is None or df.empty:
+        return None
+    df.index.name = "Date"
+    return df
+
+
+def process_krx_batch(
+    batch: List[str], last_dates: Dict[str, datetime], today: datetime, first_start: str
+) -> tuple[int, int]:
+    """
+    국내 종목은 FDR 단일 호출만 지원하므로 개별 순회. yfinance bulk와 달리 batch로 묶어도
+    병렬 장점은 없지만 공통 로직(last_date 증분, upsert) 재사용을 위해 batch 단위로 처리한다.
+    """
+    succeeded = 0
+    failed = 0
+    for sym in batch:
+        last = last_dates.get(sym)
+        start = (last + timedelta(days=1)).date().isoformat() if last else first_start
+        # 이미 최신이면 호출 자체 생략
+        if last and last.date() >= today.date():
+            succeeded += 1
+            continue
+        df = _fetch_krx_single(sym, start)
+        if df is None:
+            # 증분인데 새 데이터 없음 → 최신 상태로 간주
+            if last:
+                succeeded += 1
+            else:
+                failed += 1
+            continue
+        # 증분이면 last 이후로만
+        if last is not None:
+            df = df[df.index > last]
+            if df.empty:
+                succeeded += 1
+                continue
+        n = upsert_market_data(sym, df)
+        succeeded += 1 if n > 0 else 0
+    return succeeded, failed
+
+
 def process_batch(
     batch: List[str], last_dates: Dict[str, datetime], today: datetime, first_start: str
 ) -> tuple[int, int]:
     """
-    한 배치를 두 그룹으로 나눠 다운로드:
+    한 배치를 두 그룹으로 나눠 다운로드 (미국 종목 전용):
       - 처음 받는 종목: first_start 부터
       - 증분 종목: start=배치 내 가장 이른 last_date+1
     """
@@ -270,7 +326,15 @@ def main():
     parser = argparse.ArgumentParser(description="Bulk ingest US equities via yfinance")
     parser.add_argument(
         "--tickers-file",
-        help="티커 리스트 파일 (줄당 1개). 기본: NASDAQ 100 ∪ S&P 500 ∪ Russell 2000",
+        help="티커 리스트 파일 (줄당 1개). 지정하면 --universe는 무시됨",
+    )
+    parser.add_argument(
+        "--universe",
+        default="all-us",
+        help=(
+            "수집할 유니버스: sp500 / nasdaq100 / russell1000 / russell2000 / russell3000 / "
+            "watchlist / kospi200 / kosdaq150 / krx350 / all-us (기본: R1000∪R2000∪NDX100+SPY)"
+        ),
     )
     parser.add_argument("--limit", type=int, help="처음 N개 종목만 테스트")
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
@@ -303,12 +367,17 @@ def main():
         print(f"⚠️ Name map load failed ({e}); falling back to ticker-as-name")
         _NAME_MAP = {}
 
-    # 1. 티커 리스트 — 기본값: NASDAQ 100 ∪ S&P 500 ∪ Russell 2000
-    tickers = (
-        load_tickers_from_file(args.tickers_file)
-        if args.tickers_file
-        else get_bulk_ingest_universe()
-    )
+    # 1. 티커 리스트 결정: --tickers-file > --universe
+    if args.tickers_file:
+        tickers = load_tickers_from_file(args.tickers_file)
+        print(f"📄 Loaded {len(tickers)} tickers from {args.tickers_file}")
+    elif args.universe == "all-us":
+        tickers = get_bulk_ingest_universe()
+        print(f"🇺🇸 Universe: all-us ({len(tickers)} symbols)")
+    else:
+        tickers = list(dict.fromkeys(get_universe(args.universe)))
+        print(f"🗂  Universe: {args.universe} ({len(tickers)} symbols)")
+
     if args.limit:
         tickers = tickers[: args.limit]
         print(f"   → limited to first {len(tickers)}")
@@ -326,18 +395,31 @@ def main():
     print(f"   → {len(last_dates)} symbols already have data")
     print(f"   → {len(tickers) - len(last_dates)} need first-time fetch")
 
-    # 3. Bulk 수집
+    # 3. Bulk 수집 — 국내/미국 분리 후 각각의 로직으로
     today = datetime.now(timezone.utc)
-    batches = [tickers[i : i + args.batch_size] for i in range(0, len(tickers), args.batch_size)]
+    kr_tickers = [t for t in tickers if is_krx_symbol(t)]
+    us_tickers = [t for t in tickers if not is_krx_symbol(t)]
+    if kr_tickers:
+        print(f"   🇰🇷 KRX: {len(kr_tickers)} · 🇺🇸 US: {len(us_tickers)}")
+
+    batches: List[tuple[str, List[str]]] = []
+    for i in range(0, len(us_tickers), args.batch_size):
+        batches.append(("us", us_tickers[i : i + args.batch_size]))
+    for i in range(0, len(kr_tickers), args.batch_size):
+        batches.append(("kr", kr_tickers[i : i + args.batch_size]))
+
     total_succeeded = 0
     total_failed = 0
 
     print(f"\n🚀 Ingesting in {len(batches)} batches (size {args.batch_size})\n")
-    for i, batch in enumerate(batches):
+    for i, (market, batch) in enumerate(batches):
         batch_start = time.time()
-        print(f"[{i+1}/{len(batches)}] {len(batch)} symbols")
+        print(f"[{i+1}/{len(batches)}] {market.upper()} · {len(batch)} symbols")
         try:
-            s, f = process_batch(batch, last_dates, today, first_start)
+            if market == "kr":
+                s, f = process_krx_batch(batch, last_dates, today, first_start)
+            else:
+                s, f = process_batch(batch, last_dates, today, first_start)
             total_succeeded += s
             total_failed += f
         except Exception as e:

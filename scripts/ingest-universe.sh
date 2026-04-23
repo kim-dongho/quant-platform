@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
-# Bulk universe ingestion — yfinance로 NASDAQ+NYSE common stock 전체 수집 후 factor 계산까지.
+# Bulk universe ingestion — 미국은 yfinance, 국내(.KS/.KQ)는 FinanceDataReader 자동 분기.
 # 엔진 컨테이너 내부에서 실행되며, 모든 인자는 그대로 Python script에 전달됩니다.
 #
 # 사용 예:
-#   ./scripts/ingest-universe.sh                       # 전체 수집 (밤새 돌리기용)
-#   ./scripts/ingest-universe.sh --limit 200           # 처음 200종목 테스트
+#   ./scripts/ingest-universe.sh                              # all-us (R1000∪R2000∪NDX100+SPY)
+#   ./scripts/ingest-universe.sh --universe sp500             # 미국 SP500
+#   ./scripts/ingest-universe.sh --universe kospi200          # 국내 KOSPI 200 (시총 기준)
+#   ./scripts/ingest-universe.sh --universe krx350            # 국내 KOSPI200 ∪ KOSDAQ150
+#   ./scripts/ingest-universe.sh --limit 200                  # 처음 200종목 테스트
 #   ./scripts/ingest-universe.sh --batch-size 50 --sleep 2
 #   ./scripts/ingest-universe.sh --tickers-file /tmp/my.txt
 #   ./scripts/ingest-universe.sh --skip-factors
