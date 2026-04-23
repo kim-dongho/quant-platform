@@ -8,6 +8,31 @@ definitions:
     type: object
   quant-server_internal_model.BacktestRequest:
     type: object
+  quant-server_internal_model.IntradayCandle:
+    description: 실시간 트레이딩 차트(Lightweight Charts)를 위한 1분봉 OHLCV 데이터
+    properties:
+      close:
+        example: 15.4
+        type: number
+      high:
+        example: 15.8
+        type: number
+      low:
+        example: 14.9
+        type: number
+      open:
+        example: 15.25
+        type: number
+      symbol:
+        example: RKLB
+        type: string
+      time:
+        example: 1700000000
+        type: integer
+      volume:
+        example: 12500
+        type: number
+    type: object
   quant-server_internal_model.MarketData:
     description: 개별 일자의 시가, 고가, 저가, 종가 및 거래량 정보
     properties:
@@ -48,6 +73,31 @@ definitions:
       volume:
         example: 1200500
         type: number
+    type: object
+  quant-server_internal_model.PortfolioRule:
+    properties:
+      config:
+        items:
+          type: integer
+        type: array
+      created_at:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  quant-server_internal_model.PortfolioRuleRequest:
+    properties:
+      config:
+        items:
+          type: integer
+        type: array
+      name:
+        example: 오버솔드 리버설
+        type: string
     type: object
   quant-server_internal_model.StockHistoryResponse:
     description: 주식의 기본 정보와 과거 시세 데이터를 포함합니다.
@@ -108,6 +158,222 @@ paths:
       summary: 퀀트 백테스트 실행
       tags:
       - backtest
+  /portfolio/backtest:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Backtest request (universe, clauses, max_positions, start_date,
+          end_date)
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: 포트폴리오 백테스트 실행 (엔진 프록시)
+      tags:
+      - portfolio
+  /portfolio/ingest_status:
+    get:
+      parameters:
+      - description: 'Universe name (default: sp500)'
+        in: query
+        name: universe
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 유니버스 수집 진행 상태 조회 (엔진 프록시)
+      tags:
+      - portfolio
+  /portfolio/ingest_universe:
+    post:
+      description: 지정한 universe에 속한 모든 종목의 일봉/팩터를 백그라운드로 수집. 즉시 202 반환.
+      parameters:
+      - description: 'Universe name (default: sp500)'
+        in: query
+        name: universe
+        type: string
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 유니버스 전체 데이터 수집 트리거 (엔진 프록시)
+      tags:
+      - portfolio
+  /portfolio/rules:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/quant-server_internal_model.PortfolioRule'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: 포트폴리오 룰셋 목록 조회
+      tags:
+      - portfolio
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 룰셋 payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/quant-server_internal_model.PortfolioRuleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/quant-server_internal_model.PortfolioRule'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: 포트폴리오 룰셋 생성
+      tags:
+      - portfolio
+  /portfolio/rules/{id}:
+    delete:
+      parameters:
+      - description: Rule ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: 포트폴리오 룰셋 삭제
+      tags:
+      - portfolio
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Rule ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 룰셋 payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/quant-server_internal_model.PortfolioRuleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/quant-server_internal_model.PortfolioRule'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: 포트폴리오 룰셋 수정
+      tags:
+      - portfolio
+  /portfolio/screen:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Screen request (universe, clauses, max_positions, as_of)
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: 포트폴리오 스크리닝 실행 (엔진 프록시)
+      tags:
+      - portfolio
   /stocks/{symbol}/history:
     get:
       consumes:
@@ -145,6 +411,51 @@ paths:
               type: string
             type: object
       summary: 주식 히스토리 조회
+      tags:
+      - stocks
+  /stocks/{symbol}/intraday:
+    get:
+      consumes:
+      - application/json
+      description: 특정 심볼의 1분봉(Intraday) 시세 데이터를 조회합니다. (없으면 자동 수집)
+      parameters:
+      - description: Stock Symbol (e.g., NVDA)
+        in: path
+        name: symbol
+        required: true
+        type: string
+      - description: '가져올 데이터 갯수 (기본값: 1000)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/quant-server_internal_model.IntradayCandle'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: 1분봉 시세 조회
       tags:
       - stocks
   /stocks/list:
