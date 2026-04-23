@@ -16,14 +16,18 @@ export const FACTOR_OPTIONS: {
 
 export const OPS: FactorOp[] = ['<', '<=', '>', '>=', '=', '!='];
 
-export const UNIVERSE_OPTIONS = [
-  { value: 'nasdaq100', label: 'NASDAQ 100' },
-  { value: 'sp500', label: 'S&P 500' },
-  { value: 'russell1000', label: 'Russell 1000 (대형주)' },
-  { value: 'russell2000', label: 'Russell 2000 (소형주)' },
-  { value: 'russell3000', label: 'Russell 3000 (전 시장)' },
-  { value: 'watchlist', label: '개인 Watchlist' },
-  { value: 'all', label: 'All US Common (느림)' },
+export const UNIVERSE_OPTIONS: { value: string; label: string; group?: string }[] = [
+  // 미국
+  { value: 'nasdaq100', label: 'NASDAQ 100', group: '🇺🇸 US' },
+  { value: 'sp500', label: 'S&P 500', group: '🇺🇸 US' },
+  { value: 'russell1000', label: 'Russell 1000 (대형주)', group: '🇺🇸 US' },
+  { value: 'russell2000', label: 'Russell 2000 (소형주)', group: '🇺🇸 US' },
+  { value: 'russell3000', label: 'Russell 3000 (전 시장)', group: '🇺🇸 US' },
+  { value: 'watchlist', label: '개인 Watchlist', group: '🇺🇸 US' },
+  // 국내 (FinanceDataReader · 시총 기준 근사)
+  { value: 'kospi200', label: 'KOSPI 200 (시총 상위)', group: '🇰🇷 KR' },
+  { value: 'kosdaq150', label: 'KOSDAQ 150 (시총 상위)', group: '🇰🇷 KR' },
+  { value: 'krx350', label: 'KRX 350 (KOSPI200 + KOSDAQ150)', group: '🇰🇷 KR' },
 ];
 
 export const getFactorLabel = (key: FactorKey): string =>
