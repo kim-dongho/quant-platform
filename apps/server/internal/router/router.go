@@ -16,7 +16,6 @@ func SetupRoutes(app *fiber.App) {
 	// 주식 관련 경로
 	stocks := api.Group("/stocks")
 	stocks.Get("/:symbol/history", controller.GetStockHistory)
-	stocks.Get("/:symbol/intraday", controller.GetIntradayCandles)
 	stocks.Get("/list", controller.GetStockList)
 	stocks.Get("/search", controller.SearchStocks)
 

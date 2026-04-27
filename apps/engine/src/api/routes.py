@@ -2,7 +2,6 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from src.service.backtest import calculate_strategy
 from src.service.ingest import save_to_db
-from src.service.ingest_1m import save_1m_to_db
 from src.service.market_calendar import get_last_session_date
 from src.service.kis_client import KisError, get_kis_client
 from src.service.live_strategy import (
@@ -53,14 +52,6 @@ def ingest_data_api(ticker: str):
         print(f"❌ Ingestion failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-@router.post("/ingest_1m/{ticker}")
-def ingest_1m_data(ticker: str):
-    try:
-        save_1m_to_db(ticker)
-        return {"status": "success", "message": f"1m data for {ticker} saved"}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
 
 class ScreenClause(BaseModel):
     factor: str

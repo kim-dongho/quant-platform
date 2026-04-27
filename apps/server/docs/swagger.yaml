@@ -17,31 +17,6 @@ definitions:
     type: object
   quant-server_internal_model.BacktestRequest:
     type: object
-  quant-server_internal_model.IntradayCandle:
-    description: 실시간 트레이딩 차트(Lightweight Charts)를 위한 1분봉 OHLCV 데이터
-    properties:
-      close:
-        example: 15.4
-        type: number
-      high:
-        example: 15.8
-        type: number
-      low:
-        example: 14.9
-        type: number
-      open:
-        example: 15.25
-        type: number
-      symbol:
-        example: RKLB
-        type: string
-      time:
-        example: 1700000000
-        type: integer
-      volume:
-        example: 12500
-        type: number
-    type: object
   quant-server_internal_model.MarketData:
     description: 개별 일자의 시가, 고가, 저가, 종가 및 거래량 정보
     properties:
@@ -577,51 +552,6 @@ paths:
               type: string
             type: object
       summary: 주식 히스토리 조회
-      tags:
-      - stocks
-  /stocks/{symbol}/intraday:
-    get:
-      consumes:
-      - application/json
-      description: 특정 심볼의 1분봉(Intraday) 시세 데이터를 조회합니다. (없으면 자동 수집)
-      parameters:
-      - description: Stock Symbol (e.g., NVDA)
-        in: path
-        name: symbol
-        required: true
-        type: string
-      - description: '가져올 데이터 갯수 (기본값: 1000)'
-        in: query
-        name: limit
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            items:
-              $ref: '#/definitions/quant-server_internal_model.IntradayCandle'
-            type: array
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "404":
-          description: Not Found
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: 1분봉 시세 조회
       tags:
       - stocks
   /stocks/list:

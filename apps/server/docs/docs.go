@@ -763,74 +763,6 @@ const docTemplate = `{
                     }
                 }
             }
-        },
-        "/stocks/{symbol}/intraday": {
-            "get": {
-                "description": "특정 심볼의 1분봉(Intraday) 시세 데이터를 조회합니다. (없으면 자동 수집)",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "stocks"
-                ],
-                "summary": "1분봉 시세 조회",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Stock Symbol (e.g., NVDA)",
-                        "name": "symbol",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "integer",
-                        "description": "가져올 데이터 갯수 (기본값: 1000)",
-                        "name": "limit",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/quant-server_internal_model.IntradayCandle"
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
         }
     },
     "definitions": {
@@ -858,40 +790,6 @@ const docTemplate = `{
         },
         "quant-server_internal_model.BacktestRequest": {
             "type": "object"
-        },
-        "quant-server_internal_model.IntradayCandle": {
-            "description": "실시간 트레이딩 차트(Lightweight Charts)를 위한 1분봉 OHLCV 데이터",
-            "type": "object",
-            "properties": {
-                "close": {
-                    "type": "number",
-                    "example": 15.4
-                },
-                "high": {
-                    "type": "number",
-                    "example": 15.8
-                },
-                "low": {
-                    "type": "number",
-                    "example": 14.9
-                },
-                "open": {
-                    "type": "number",
-                    "example": 15.25
-                },
-                "symbol": {
-                    "type": "string",
-                    "example": "RKLB"
-                },
-                "time": {
-                    "type": "integer",
-                    "example": 1700000000
-                },
-                "volume": {
-                    "type": "number",
-                    "example": 12500
-                }
-            }
         },
         "quant-server_internal_model.MarketData": {
             "description": "개별 일자의 시가, 고가, 저가, 종가 및 거래량 정보",

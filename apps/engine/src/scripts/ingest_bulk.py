@@ -83,7 +83,7 @@ def get_last_dates(symbols: List[str]) -> Dict[str, datetime]:
 
 
 def cleanup_non_universe(valid_symbols: List[str]) -> Dict[str, int]:
-    """valid_symbols에 없는 symbol의 데이터를 factors / market_data / market_data_1m / stocks에서 삭제."""
+    """valid_symbols에 없는 symbol의 데이터를 factors / market_data / stocks에서 삭제."""
     if not valid_symbols:
         raise RuntimeError("Refusing to cleanup with empty valid_symbols")
 
@@ -95,18 +95,13 @@ def cleanup_non_universe(valid_symbols: List[str]) -> Dict[str, int]:
 
     deleted: Dict[str, int] = {}
     with engine.begin() as conn:
-        for table in ("factors", "market_data", "market_data_1m", "stocks"):
-            try:
-                result = conn.execute(
-                    text(f"DELETE FROM {table} WHERE symbol NOT IN ({placeholders})"),
-                    params,
-                )
-                deleted[table] = result.rowcount or 0
-                print(f"   → {table}: {deleted[table]} rows deleted")
-            except Exception as e:
-                # market_data_1m이 없으면 스킵
-                print(f"   ⚠️ {table} skipped: {e}")
-                deleted[table] = 0
+        for table in ("factors", "market_data", "stocks"):
+            result = conn.execute(
+                text(f"DELETE FROM {table} WHERE symbol NOT IN ({placeholders})"),
+                params,
+            )
+            deleted[table] = result.rowcount or 0
+            print(f"   → {table}: {deleted[table]} rows deleted")
     return deleted
 
 
