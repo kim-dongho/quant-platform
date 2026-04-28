@@ -86,6 +86,21 @@ def _label(symbol: str, name: Optional[str]) -> str:
     return symbol
 
 
+def _place_order_with_retry(kis: KisClient, symbol: str, qty: int, side: str) -> bool:
+    """KIS 주문 발송 + rate limit(EGW00201) 시 1회 재시도. 성공 True."""
+    for attempt in range(2):
+        try:
+            kis.place_order(symbol=symbol, qty=qty, side=side, order_type="market")
+            return True
+        except KisError as e:
+            if "EGW00201" in str(e) and attempt == 0:
+                time.sleep(KIS_RATE_LIMIT_RETRY_SLEEP_SEC)
+                continue
+            print(f"   ❌ {side} failed: {e}")
+            return False
+    return False
+
+
 def _evaluate_exits(
     holdings: list[dict[str, Any]],
     open_trades: dict[str, dict[str, Any]],
@@ -187,7 +202,10 @@ def run_once(dry_run: bool = False) -> dict[str, Any]:
     sold_syms: set[str] = set()
     # 매도 단가 추정용 — 실 체결가는 비동기지만 기록상 현재가 사용
     cur_prices = {h["symbol"]: float(h.get("current_price") or 0) for h in holdings}
-    for symbol, qty, name, reason, trade_id in to_exit:
+    for i, (symbol, qty, name, reason, trade_id) in enumerate(to_exit):
+        if i > 0 and not dry_run:
+            # KIS 모의 초당 2건 제한 회피 + rate limit 시 1회 retry
+            time.sleep(KIS_QUOTE_SLEEP_SEC)
         label = _label(symbol, name)
         print(f"🔻 SELL {label} qty={qty} reason={reason}")
         record = {"symbol": symbol, "name": name, "qty": qty, "reason": reason}
@@ -196,16 +214,13 @@ def run_once(dry_run: bool = False) -> dict[str, Any]:
             sells.append(record)
             sold_syms.add(symbol)
             continue
-        try:
-            kis.place_order(symbol=symbol, qty=qty, side="sell", order_type="market")
+        if _place_order_with_retry(kis, symbol, qty, side="sell"):
             sells.append(record)
             sold_syms.add(symbol)
             # trade close — 진입일/peak이 있는 경우만 (외부 매수분이면 trade_id None)
             if trade_id is not None:
                 exit_px = cur_prices.get(symbol) or 0.0
                 record_exit(trade_id, exit_price=exit_px, reason=reason)
-        except KisError as e:
-            print(f"   ❌ sell failed: {e}")
 
     # ─── 2. 진입 후보 (screen) ───────────────────────────────
     held_syms = {h["symbol"] for h in holdings} - sold_syms
@@ -258,7 +273,9 @@ def run_once(dry_run: bool = False) -> dict[str, Any]:
     # ─── 4. 매수 주문 ────────────────────────────────────────
     buys: list[dict[str, Any]] = []
     size_krw = int(strategy.get("position_size_krw") or 0)
-    for c, gap in selected:
+    for i, (c, gap) in enumerate(selected):
+        if i > 0 and not dry_run:
+            time.sleep(KIS_QUOTE_SLEEP_SEC)
         symbol = c["symbol"]
         name = c.get("company_name") or symbol
         label = _label(symbol, name)
@@ -282,12 +299,9 @@ def run_once(dry_run: bool = False) -> dict[str, Any]:
             buys.append(record)
             cash -= cost
             continue
-        try:
-            kis.place_order(symbol=symbol, qty=qty, side="buy", order_type="market")
+        if _place_order_with_retry(kis, symbol, qty, side="buy"):
             buys.append(record)
             cash -= cost
-            # trade 기록 — 진입일/평단/peak 보존 (다음 사이클의 time_exit/trailing 평가에 사용).
-            # 실 체결가는 비동기라 이 시점엔 모르지만 가까운 시가/현재가로 기록.
             record_entry(
                 strategy_id=strategy["id"],
                 symbol=symbol,
@@ -295,8 +309,6 @@ def run_once(dry_run: bool = False) -> dict[str, Any]:
                 qty=qty,
                 entry_price=price,
             )
-        except KisError as e:
-            print(f"   ❌ buy failed: {e}")
 
     # ─── 5. last_rebalance_at 갱신 ────────────────────────────
     if not dry_run:
