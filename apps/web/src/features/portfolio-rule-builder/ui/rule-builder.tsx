@@ -454,8 +454,8 @@ const AddRuleMenu = ({
 }) => (
   <>
     <div className="fixed inset-0 z-30" onClick={onClose} />
-    <div className="border-outline-variant/50 bg-surface-container-lowest absolute top-full right-0 z-40 mt-1 w-64 overflow-hidden rounded-lg border shadow-lg">
-      <div className="border-outline-variant/30 bg-surface-container-low text-on-surface-variant border-b px-3 py-1.5 text-[10px] font-semibold tracking-wider uppercase">
+    <div className="border-outline-variant/50 bg-surface-container-lowest absolute top-full right-0 z-40 mt-1 flex max-h-[70vh] w-64 flex-col overflow-y-auto rounded-lg border shadow-lg">
+      <div className="border-outline-variant/30 bg-surface-container-low text-on-surface-variant sticky top-0 border-b px-3 py-1.5 text-[10px] font-semibold tracking-wider uppercase">
         매수 조건 (진입 팩터)
       </div>
       {FACTOR_OPTIONS.map((f) => {
@@ -515,8 +515,8 @@ const TemplateMenu = ({
 }) => (
   <>
     <div className="fixed inset-0 z-30" onClick={onClose} />
-    <div className="border-outline-variant/50 bg-surface-container-lowest absolute top-full right-0 z-40 mt-1 w-72 overflow-hidden rounded-lg border shadow-lg">
-      <div className="border-outline-variant/30 bg-surface-container-low text-on-surface-variant border-b px-3 py-1.5 text-[10px] font-semibold tracking-wider uppercase">
+    <div className="border-outline-variant/50 bg-surface-container-lowest absolute top-full right-0 z-40 mt-1 flex max-h-[70vh] w-72 flex-col overflow-y-auto rounded-lg border shadow-lg">
+      <div className="border-outline-variant/30 bg-surface-container-low text-on-surface-variant sticky top-0 border-b px-3 py-1.5 text-[10px] font-semibold tracking-wider uppercase">
         전략 템플릿 — 선택 시 현재 조건을 덮어씁니다
       </div>
       {STRATEGY_TEMPLATES.map((t) => {
