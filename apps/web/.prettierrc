@@ -16,6 +16,7 @@
     "^next",
     "<THIRD_PARTY_MODULES>",
     "^@/app/(.*)$",
+    "^@/views/(.*)$",
     "^@/widgets/(.*)$",
     "^@/features/(.*)$",
     "^@/entities/(.*)$",

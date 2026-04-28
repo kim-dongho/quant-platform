@@ -2,7 +2,8 @@
 
 import { useEffect, useRef } from 'react';
 
-import { ColorType, IChartApi, LineStyle, Time, createChart } from 'lightweight-charts';
+import type { IChartApi, Time } from 'lightweight-charts';
+import { ColorType, LineStyle, createChart } from 'lightweight-charts';
 
 import type { PortfolioBacktestResult } from '@/entities/portfolio/model/types';
 

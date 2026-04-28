@@ -17,8 +17,8 @@ export const HoldingsBar = ({ result }: Props) => {
             시뮬레이션 마지막 보유 종목
           </h3>
           <p className="text-on-surface-variant text-[11px]">
-            과거 데이터의 마지막 거래일 기준 · 동일 조건으로 실제 운용하면 위의 "오늘의 추천 종목"과
-            같아집니다
+            과거 데이터의 마지막 거래일 기준 · 동일 조건으로 실제 운용하면 위의 &ldquo;오늘의 추천
+            종목&rdquo;과 같아집니다
           </p>
         </div>
         <span className="text-on-surface-variant shrink-0 text-[11px]">

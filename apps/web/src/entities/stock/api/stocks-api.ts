@@ -1,6 +1,6 @@
 import { apiClient } from '@/shared/api/client';
 
-import {
+import type {
   GetStockListResponseDto,
   SearchStocksResponseDto,
   getBacktestResultResponseDto,

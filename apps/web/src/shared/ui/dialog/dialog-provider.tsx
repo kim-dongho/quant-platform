@@ -65,11 +65,7 @@ export const DialogProvider = ({ children }: { children: React.ReactNode }) => {
     <DialogContext.Provider value={value}>
       {children}
       {state && (
-        <DialogRoot
-          state={state}
-          onConfirm={() => close(true)}
-          onCancel={() => close(false)}
-        />
+        <DialogRoot state={state} onConfirm={() => close(true)} onCancel={() => close(false)} />
       )}
     </DialogContext.Provider>
   );
@@ -134,7 +130,7 @@ const DialogRoot = ({ state, onConfirm, onCancel }: DialogRootProps) => {
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md overflow-hidden rounded-2xl bg-surface-container-lowest shadow-[0_20px_50px_rgba(0,0,0,0.25)]"
+        className="bg-surface-container-lowest w-full max-w-md overflow-hidden rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.25)]"
       >
         {/* Header */}
         <div className="flex items-start gap-4 px-6 pt-6 pb-4">
@@ -147,7 +143,7 @@ const DialogRoot = ({ state, onConfirm, onCancel }: DialogRootProps) => {
           </div>
           <h2
             id="dialog-title"
-            className="flex-1 pt-1.5 text-[18px] leading-tight font-semibold text-on-surface"
+            className="text-on-surface flex-1 pt-1.5 text-[18px] leading-tight font-semibold"
           >
             {state.title}
           </h2>
@@ -155,7 +151,7 @@ const DialogRoot = ({ state, onConfirm, onCancel }: DialogRootProps) => {
             type="button"
             onClick={() => (isAlert ? onConfirm() : onCancel())}
             aria-label="Close"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-on-surface-variant transition-colors hover:bg-surface-container-low hover:text-on-surface"
+            className="text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors"
           >
             <span className="material-symbols-outlined text-[20px]">close</span>
           </button>
@@ -165,12 +161,12 @@ const DialogRoot = ({ state, onConfirm, onCancel }: DialogRootProps) => {
         {(state.description || state.details) && (
           <div className="flex flex-col gap-4 px-6 pb-6">
             {state.description && (
-              <div className="text-sm leading-relaxed text-on-surface-variant">
+              <div className="text-on-surface-variant text-sm leading-relaxed">
                 {state.description}
               </div>
             )}
             {state.details && state.details.length > 0 && (
-              <div className="flex items-center justify-between gap-4 rounded-lg bg-primary-fixed/40 px-4 py-3">
+              <div className="bg-primary-fixed/40 flex items-center justify-between gap-4 rounded-lg px-4 py-3">
                 {state.details.map((d, i) => (
                   <div
                     key={i}
@@ -180,10 +176,10 @@ const DialogRoot = ({ state, onConfirm, onCancel }: DialogRootProps) => {
                         : ''
                     }`}
                   >
-                    <span className="text-[11px] font-medium text-on-surface-variant">
+                    <span className="text-on-surface-variant text-[11px] font-medium">
                       {d.label}
                     </span>
-                    <span className="font-mono text-sm font-semibold tabular-nums text-on-surface">
+                    <span className="text-on-surface font-mono text-sm font-semibold tabular-nums">
                       {d.value}
                     </span>
                   </div>
@@ -194,12 +190,12 @@ const DialogRoot = ({ state, onConfirm, onCancel }: DialogRootProps) => {
         )}
 
         {/* Footer */}
-        <div className="flex justify-end gap-2 border-t border-outline-variant/30 bg-surface-container-low/60 px-5 py-4">
+        <div className="border-outline-variant/30 bg-surface-container-low/60 flex justify-end gap-2 border-t px-5 py-4">
           {!isAlert && (
             <button
               type="button"
               onClick={onCancel}
-              className="min-w-[100px] rounded-lg border border-outline-variant/60 bg-surface px-5 py-2 text-sm font-semibold text-on-surface transition-colors hover:bg-surface-container-low"
+              className="border-outline-variant/60 bg-surface text-on-surface hover:bg-surface-container-low min-w-[100px] rounded-lg border px-5 py-2 text-sm font-semibold transition-colors"
             >
               {state.cancelText ?? 'Cancel'}
             </button>

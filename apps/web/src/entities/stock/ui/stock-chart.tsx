@@ -2,18 +2,12 @@
 
 import { useEffect, useRef } from 'react';
 
-import {
-  ColorType,
-  IChartApi,
-  LineStyle,
-  SeriesMarker,
-  Time,
-  createChart,
-} from 'lightweight-charts';
+import type { IChartApi, SeriesMarker, Time } from 'lightweight-charts';
+import { ColorType, LineStyle, createChart } from 'lightweight-charts';
 
 import { formatPrice, getCurrency } from '@/shared/lib/format-price';
 
-import { ChartOptions, MarketData } from '../model/stocks-common';
+import type { ChartOptions, MarketData } from '../model/stocks-common';
 
 interface Props {
   data: MarketData[];

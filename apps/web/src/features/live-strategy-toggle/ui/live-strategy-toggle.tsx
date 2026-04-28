@@ -5,7 +5,6 @@ import { useState } from 'react';
 import {
   useActiveLiveStrategy,
   useStopLiveStrategy,
-  useUpsertLiveStrategy,
 } from '@/entities/live-strategy/api/live-strategy-queries';
 import type { LiveStrategy } from '@/entities/live-strategy/model/types';
 import { UNIVERSE_OPTIONS, getFactorLabel } from '@/entities/portfolio/model/factors';

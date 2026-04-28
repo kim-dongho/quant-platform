@@ -1,6 +1,7 @@
 'use client';
 
-import { KeyboardEvent, useEffect, useRef, useState } from 'react';
+import type { KeyboardEvent } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { useStockSearchQuery } from '@/entities/stock/api/stocks-queries';
 

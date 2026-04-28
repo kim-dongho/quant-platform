@@ -1,4 +1,4 @@
-import { MarketData } from "../model/stocks-common";
+import type { MarketData } from '../model/stocks-common';
 
 /**
  * 단순 이동평균(SMA) 계산 함수
@@ -8,13 +8,13 @@ import { MarketData } from "../model/stocks-common";
  */
 export function calculateSMA(data: MarketData[], count: number) {
   const result = [];
-  
+
   for (let i = count - 1; i < data.length; i++) {
     const slice = data.slice(i - count + 1, i + 1);
     const sum = slice.reduce((a, b) => a + b.close, 0);
     result.push({ time: data[i].time, value: sum / count });
   }
-  
+
   return result;
 }
 
@@ -41,7 +41,7 @@ export function calculateBollingerBands(data: MarketData[], count = 20, multipli
   const result = [];
   for (let i = count - 1; i < data.length; i++) {
     const slice = data.slice(i - count + 1, i + 1);
-    
+
     const sma = slice.reduce((a, b) => a + b.close, 0) / count;
     const stdDev = calculateStdDev(slice, count);
 
@@ -80,7 +80,7 @@ export function calculateRSI(data: MarketData[], count = 14) {
 
   for (let i = count; i < data.length; i++) {
     const change = data[i].close - data[i - 1].close;
-    
+
     if (change > 0) {
       avgGain = (avgGain * (count - 1) + change) / count;
       avgLoss = (avgLoss * (count - 1)) / count;
@@ -90,7 +90,7 @@ export function calculateRSI(data: MarketData[], count = 14) {
     }
 
     const rs = avgGain / avgLoss;
-    const rsi = 100 - (100 / (1 + rs));
+    const rsi = 100 - 100 / (1 + rs);
 
     result.push({ time: data[i].time, value: rsi });
   }
@@ -100,7 +100,7 @@ export function calculateRSI(data: MarketData[], count = 14) {
 /**
  * 지수 이동평균(EMA) 헬퍼 함수
  */
-function calculateEMA(data: { time: string; value: number }[], count: number) {
+function calculateEMA(data: { time: string | number; value: number }[], count: number) {
   const k = 2 / (count + 1);
   const result = [];
   let ema = data[0].value;
@@ -119,8 +119,8 @@ function calculateEMA(data: { time: string; value: number }[], count: number) {
 export function calculateMACD(data: MarketData[]) {
   if (data.length < 26) return { macd: [], signal: [], histogram: [] };
 
-  const closeData = data.map(d => ({ time: d.time, value: d.close }));
-  
+  const closeData = data.map((d) => ({ time: d.time, value: d.close }));
+
   const ema12 = calculateEMA(closeData, 12);
   const ema26 = calculateEMA(closeData, 26);
 
@@ -134,7 +134,7 @@ export function calculateMACD(data: MarketData[]) {
   const signalLine = calculateEMA(macdLine, 9);
   const histogram = macdLine.map((m, i) => ({
     time: m.time,
-    value: m.value - (signalLine[i]?.value || 0)
+    value: m.value - (signalLine[i]?.value || 0),
   }));
 
   return { macd: macdLine, signal: signalLine, histogram };
