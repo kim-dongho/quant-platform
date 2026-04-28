@@ -7,6 +7,8 @@
 ![Status](https://img.shields.io/badge/Status-In%20Development-green)
 ![Self-Host](https://img.shields.io/badge/Self--Host-docker--compose-informational)
 
+![Hero](./docs/images/screenshots/hero.png)
+
 ## 목차
 
 1. [개요](#1-개요)
@@ -285,6 +287,8 @@ quant-platform/
 - 비동기 실행 — 시작 즉시 `job_id` 반환 후 진행률 polling
 - 결과 카드 → "이 룰 적용" 클릭 한 번에 빌더에 반영
 
+![Strategy Discover](./docs/images/screenshots/strategy-discover.png)
+
 **🤖 라이브 운영** — `/live`
 
 - 현재 활성 전략 카드 (없으면 안내)
@@ -292,6 +296,8 @@ quant-platform/
 - 오늘의 후보 종목 (활성 전략 룰로 다시 스크리닝)
 - 주문·체결 내역 (KIS API)
 - 라이브 활성화 토글 — 활성화 시 기존 전략 자동 비활성화
+
+![Live Overview](./docs/images/screenshots/live-overview.png)
 
 **📈 라이브 자동매매 워커** ([상세](./apps/engine/README.md#6-라이브-자동매매))
 
