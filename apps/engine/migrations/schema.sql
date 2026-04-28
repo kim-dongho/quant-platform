@@ -74,3 +74,27 @@ CREATE TABLE IF NOT EXISTS live_strategies (
 -- 활성 전략은 동시에 1개만 허용 (partial unique index)
 CREATE UNIQUE INDEX IF NOT EXISTS ux_live_strategies_active
     ON live_strategies ((TRUE)) WHERE is_active;
+
+-- 라이브 매매 trade 로그 — time_exit / trailing_stop 평가에 필요한 진입일·peak 보관
+CREATE TABLE IF NOT EXISTS live_trades (
+    id              SERIAL PRIMARY KEY,
+    strategy_id     INT  NOT NULL REFERENCES live_strategies (id),
+    symbol          VARCHAR(20) NOT NULL,
+    name            TEXT,
+    qty             INT  NOT NULL,
+    entry_date      DATE NOT NULL,
+    entry_price     DOUBLE PRECISION NOT NULL,
+    peak_price      DOUBLE PRECISION NOT NULL,
+    exit_date       DATE,
+    exit_price      DOUBLE PRECISION,
+    exit_reason     TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- 한 전략 안에서 같은 심볼은 동시에 1개의 open trade만 (exit_date IS NULL).
+CREATE UNIQUE INDEX IF NOT EXISTS ux_live_trades_open
+    ON live_trades (strategy_id, symbol) WHERE exit_date IS NULL;
+
+CREATE INDEX IF NOT EXISTS ix_live_trades_strategy_open
+    ON live_trades (strategy_id) WHERE exit_date IS NULL;
