@@ -1,4 +1,8 @@
-from fastapi import APIRouter, HTTPException
+import threading
+import time
+import uuid
+
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 from src.service.backtest import calculate_strategy
 from src.service.ingest import save_to_db
@@ -11,6 +15,7 @@ from src.service.live_strategy import (
 )
 from src.service.portfolio_backtest import run_portfolio_backtest
 from src.service.screener import ScreenError, run_screen
+from src.service.strategy_discover import discover
 from typing import Dict, Any, List, Literal, Optional
 
 router = APIRouter()
@@ -126,6 +131,141 @@ def portfolio_backtest_api(req: PortfolioBacktestRequest):
     except Exception as e:
         print(f"❌ Portfolio backtest failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+class DiscoverRequest(BaseModel):
+    """전략 자동 탐색 요청. 모든 필드는 선택적이며, 비워두면 합리적 디폴트가 적용됨."""
+    universe: str = "krx350"
+    factors: Optional[List[str]] = None
+    ops: Optional[List[str]] = None
+    percentiles: Optional[List[float]] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    train_ratio: float = 0.7
+    max_positions: int = 10
+    n_clauses: Literal[1, 2] = 1
+    top_n: int = 5
+    exit_policy: Optional[ExitPolicyModel] = None
+
+
+@router.post("/portfolio/discover")
+def discover_portfolio_api(req: DiscoverRequest):
+    """
+    Grid search로 train/test 모두에서 우수한 룰 상위 N개를 반환 (동기 — 백워드 호환용).
+    progress 보고가 필요하면 /portfolio/discover/start + /status 사용.
+    """
+    try:
+        exit_policy_dict = _exit_policy_to_dict(req.exit_policy)
+        return discover(
+            universe=req.universe,
+            factors=req.factors,
+            ops=req.ops,
+            percentiles=req.percentiles,
+            start_date=req.start_date,
+            end_date=req.end_date,
+            train_ratio=req.train_ratio,
+            max_positions=req.max_positions,
+            n_clauses=req.n_clauses,
+            top_n=req.top_n,
+            exit_policy=exit_policy_dict,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"❌ Discover failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─────────────────────────────────────────────────────────────
+# 비동기 discover — background thread로 실행하고 polling으로 progress 조회
+# ─────────────────────────────────────────────────────────────
+_DISCOVER_JOBS: Dict[str, Dict[str, Any]] = {}
+_DISCOVER_JOBS_LOCK = threading.Lock()
+_DISCOVER_JOB_TTL_SECONDS = 30 * 60  # 종료된 job은 30분 후 GC
+
+
+def _gc_old_discover_jobs() -> None:
+    """30분 이상 된 종료/실패 job 제거 — 메모리 누수 방지."""
+    now = time.time()
+    with _DISCOVER_JOBS_LOCK:
+        stale = [
+            jid
+            for jid, job in _DISCOVER_JOBS.items()
+            if job.get("status") in ("done", "error")
+            and now - job.get("ended_at", now) > _DISCOVER_JOB_TTL_SECONDS
+        ]
+        for jid in stale:
+            del _DISCOVER_JOBS[jid]
+
+
+def _run_discover_job(job_id: str, params: Dict[str, Any]) -> None:
+    """background thread에서 실행. progress_cb로 _DISCOVER_JOBS[job_id] 갱신."""
+
+    def progress(done: int, total: int, label: str) -> None:
+        with _DISCOVER_JOBS_LOCK:
+            job = _DISCOVER_JOBS.get(job_id)
+            if job is not None:
+                job["done"] = done
+                job["total"] = total
+                job["current"] = label
+
+    try:
+        result = discover(progress_cb=progress, **params)
+        with _DISCOVER_JOBS_LOCK:
+            job = _DISCOVER_JOBS.get(job_id)
+            if job is not None:
+                job["status"] = "done"
+                job["result"] = result
+                job["ended_at"] = time.time()
+    except Exception as e:
+        print(f"❌ Discover job {job_id} failed: {e}")
+        with _DISCOVER_JOBS_LOCK:
+            job = _DISCOVER_JOBS.get(job_id)
+            if job is not None:
+                job["status"] = "error"
+                job["error"] = str(e)
+                job["ended_at"] = time.time()
+
+
+@router.post("/portfolio/discover/start")
+def discover_start(req: DiscoverRequest, background: BackgroundTasks):
+    """비동기 grid search 시작. job_id 반환 → /status/:id로 진행률 polling."""
+    _gc_old_discover_jobs()
+    job_id = uuid.uuid4().hex
+    params = {
+        "universe": req.universe,
+        "factors": req.factors,
+        "ops": req.ops,
+        "percentiles": req.percentiles,
+        "start_date": req.start_date,
+        "end_date": req.end_date,
+        "train_ratio": req.train_ratio,
+        "max_positions": req.max_positions,
+        "n_clauses": req.n_clauses,
+        "top_n": req.top_n,
+        "exit_policy": _exit_policy_to_dict(req.exit_policy),
+    }
+    with _DISCOVER_JOBS_LOCK:
+        _DISCOVER_JOBS[job_id] = {
+            "status": "running",
+            "done": 0,
+            "total": 0,
+            "current": "",
+            "started_at": time.time(),
+        }
+    background.add_task(_run_discover_job, job_id, params)
+    return {"job_id": job_id}
+
+
+@router.get("/portfolio/discover/status/{job_id}")
+def discover_status(job_id: str):
+    """진행률 + (완료 시) 결과 반환."""
+    with _DISCOVER_JOBS_LOCK:
+        job = _DISCOVER_JOBS.get(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="Job not found or expired")
+        # shallow copy — caller가 result 큰 dict 공유 받으면 OK
+        return dict(job)
 
 
 @router.get("/paper/balance")

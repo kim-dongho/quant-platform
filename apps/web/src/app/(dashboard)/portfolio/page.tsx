@@ -8,12 +8,13 @@ import { BacktestMetrics } from '@/features/portfolio-backtest-chart/ui/backtest
 import { CandidatesTable } from '@/features/portfolio-candidates/ui/candidates-table';
 import { HoldingsBar } from '@/features/portfolio-holdings-bar/ui/holdings-bar';
 import { RuleBuilder } from '@/features/portfolio-rule-builder/ui/rule-builder';
+import { DiscoverDialog } from '@/features/strategy-discover/ui/discover-dialog';
 
 import {
   useBacktestPortfolio,
   useScreenPortfolio,
 } from '@/entities/portfolio/api/portfolio-queries';
-import type { ExitPolicy, RuleConfig } from '@/entities/portfolio/model/types';
+import type { Clause, ExitPolicy, RuleConfig } from '@/entities/portfolio/model/types';
 
 const DEFAULT_CONFIG: RuleConfig = {
   universe: 'sp500',
@@ -33,6 +34,7 @@ const DEFAULT_EXIT_POLICY: ExitPolicy = {
 export default function PortfolioPage() {
   const [config, setConfig] = useState<RuleConfig>(DEFAULT_CONFIG);
   const [exitPolicy, setExitPolicy] = useState<ExitPolicy | null>(DEFAULT_EXIT_POLICY);
+  const [discoverOpen, setDiscoverOpen] = useState(false);
 
   const screenMutation = useScreenPortfolio();
   const backtestMutation = useBacktestPortfolio();
@@ -44,6 +46,10 @@ export default function PortfolioPage() {
   const resetAll = () => {
     setConfig(DEFAULT_CONFIG);
     setExitPolicy(DEFAULT_EXIT_POLICY);
+  };
+  const applyDiscoveredClauses = (clauses: Clause[]) => {
+    console.log('[discover] 룰 적용:', clauses);
+    setConfig((prev) => ({ ...prev, clauses }));
   };
 
   const isRunning = screenMutation.isPending || backtestMutation.isPending;
@@ -59,6 +65,16 @@ export default function PortfolioPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setDiscoverOpen(true)}
+            disabled={isRunning}
+            className="border-outline-variant/50 bg-surface text-on-surface hover:bg-surface-container-low flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-all disabled:opacity-50"
+            title="여러 룰 조합을 자동으로 백테스트하고 우수한 룰을 추천받습니다"
+          >
+            <span className="material-symbols-outlined text-[16px]">search</span>
+            자동 탐색
+          </button>
           <button
             type="button"
             onClick={runSimulation}
@@ -107,6 +123,14 @@ export default function PortfolioPage() {
           <HoldingsBar result={backtestMutation.data ?? null} />
         </main>
       </div>
+
+      <DiscoverDialog
+        open={discoverOpen}
+        onClose={() => setDiscoverOpen(false)}
+        defaults={{ universe: config.universe, max_positions: config.max_positions }}
+        exitPolicy={exitPolicy}
+        onApply={applyDiscoveredClauses}
+      />
     </div>
   );
 }

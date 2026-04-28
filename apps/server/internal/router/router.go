@@ -27,6 +27,9 @@ func SetupRoutes(app *fiber.App) {
 	portfolio.Delete("/rules/:id", controller.DeletePortfolioRule)
 	portfolio.Post("/screen", controller.ScreenPortfolio)
 	portfolio.Post("/backtest", controller.BacktestPortfolio)
+	portfolio.Post("/discover", controller.DiscoverPortfolio)
+	portfolio.Post("/discover/start", controller.StartDiscover)
+	portfolio.Get("/discover/status/:job_id", controller.DiscoverStatus)
 
 	// 모의투자(Paper Trade) — KIS Open API 프록시
 	paper := api.Group("/paper")

@@ -377,6 +377,94 @@ paths:
       summary: 포트폴리오 백테스트 실행 (엔진 프록시)
       tags:
       - portfolio
+  /portfolio/discover:
+    post:
+      consumes:
+      - application/json
+      description: Grid search로 train/test 모두에서 우수한 룰 상위 N개를 반환. n_clauses=2는 수분 소요될
+        수 있음.
+      parameters:
+      - description: Discover request
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: 전략 자동 탐색 (엔진 프록시, 동기)
+      tags:
+      - portfolio
+  /portfolio/discover/start:
+    post:
+      consumes:
+      - application/json
+      description: background에서 grid search 실행. /portfolio/discover/status/:id로 진행률
+        polling.
+      parameters:
+      - description: Discover request (동기 버전과 동일 페이로드)
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{ job_id: string }'
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: 전략 자동 탐색 시작 (비동기, job_id 반환)
+      tags:
+      - portfolio
+  /portfolio/discover/status/{job_id}:
+    get:
+      description: job_id의 status / done / total / result 반환. 완료 후 30분간 보존.
+      parameters:
+      - description: Job ID
+        in: path
+        name: job_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: 전략 자동 탐색 진행률·결과 조회
+      tags:
+      - portfolio
   /portfolio/rules:
     get:
       produces:
