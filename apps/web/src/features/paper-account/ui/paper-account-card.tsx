@@ -56,7 +56,7 @@ export const PaperAccountCard = () => {
 
       {data && (
         <>
-          <SummaryBlock summary={data.summary} />
+          <SummaryBlock summary={data.summary} holdings={data.holdings} />
           <HoldingsList holdings={data.holdings} />
         </>
       )}
@@ -66,11 +66,19 @@ export const PaperAccountCard = () => {
 
 const SummaryBlock = ({
   summary,
+  holdings,
 }: {
   summary: { total_eval: number; cash: number; deposit_d2: number; total_profit: number };
+  holdings: PaperHolding[];
 }) => {
   const profitPositive = summary.total_profit > 0;
   const profitNegative = summary.total_profit < 0;
+
+  // 총 수익률 = 평가손익 / 매수 원금 (= sum(qty × 평단)).
+  // 보유 종목이 없거나 원금이 0이면 0% 표시.
+  const investedAmount = holdings.reduce((sum, h) => sum + h.qty * h.avg_cost, 0);
+  const returnPct = investedAmount > 0 ? (summary.total_profit / investedAmount) * 100 : 0;
+
   return (
     <section className="bg-surface-container-low flex flex-col gap-3 rounded-md p-3">
       <div>
@@ -81,7 +89,7 @@ const SummaryBlock = ({
           {fmtKRW(summary.total_eval)}
         </div>
         <div
-          className={`font-mono text-[11px] tabular-nums ${
+          className={`flex items-baseline gap-1.5 font-mono text-[11px] tabular-nums ${
             profitPositive
               ? 'text-success'
               : profitNegative
@@ -89,7 +97,8 @@ const SummaryBlock = ({
                 : 'text-on-surface-variant'
           }`}
         >
-          평가손익 {fmtKRW(summary.total_profit)}
+          <span>평가손익 {fmtKRW(summary.total_profit)}</span>
+          {investedAmount > 0 && <span className="font-semibold">({fmtPct(returnPct)})</span>}
         </div>
       </div>
       <div className="border-outline-variant/30 grid grid-cols-2 gap-2 border-t pt-2">
