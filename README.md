@@ -63,7 +63,7 @@ Docker Compose 가 담당합니다.
 
 ### 2.2 아키텍처 다이어그램
 
-![Architecture](./docs/images/architecture.excalidraw.png)
+![Architecture](./docs/images/excalidraw/architecture.excalidraw.png)
 
 세 가지 호출 패턴:
 
@@ -83,7 +83,7 @@ Docker Compose 가 담당합니다.
 실행합니다. 미국·한국을 자동 분기하고, 적재 직후 팩터까지 계산합니다.
 유니버스 범위·옵션은 [엔진 README §5](./apps/engine/README.md#5-시세-수집-universe-ingestion).
 
-![Ingest Flow](./docs/images/flow-ingest.excalidraw.png)
+![Ingest Flow](./docs/images/excalidraw/flow-ingest.excalidraw.png)
 
 ### 3.2 백테스트·전략 자동 탐색
 
@@ -96,7 +96,7 @@ Docker Compose 가 담당합니다.
   `job_id` 반환 후 폴링. 학습 7년 / 검증 3년 모두 시장 초과한 룰 상위 N 개를
   최종 결과로 받습니다.
 
-![Backtest & Discover Flow](./docs/images/flow-backtest-discover.excalidraw.png)
+![Backtest & Discover Flow](./docs/images/excalidraw/flow-backtest-discover.excalidraw.png)
 
 > Job 결과는 메모리에 30분간 보존됩니다. 그 안에 다른 페이지로 이동했다
 > 돌아오면 같은 `job_id` 로 다시 조회 가능합니다.
@@ -107,7 +107,7 @@ Docker Compose 가 담당합니다.
 (`scripts/run-live.sh`) 의 입력이 됩니다. 워커는 매도 → 스크리닝 → 매수
 한 라운드를 돌고 종료하며, 상태는 `live_trades` 테이블로 영속화됩니다.
 
-![Live Trade Flow](./docs/images/flow-live.excalidraw.png)
+![Live Trade Flow](./docs/images/excalidraw/flow-live.excalidraw.png)
 
 상세 동작 (KIS rate limit, 동시호가 시간대, 활성 전략 변경 영향, 실전 전환
 가이드 등) 은 [엔진 README §6](./apps/engine/README.md#6-라이브-자동매매) 참조.
@@ -237,7 +237,9 @@ quant-platform/
 │   ├── ingest-universe.sh    # bulk OHLCV 적재 (engine 컨테이너 호출)
 │   ├── run-live.sh           # 라이브 매매 1회 실행 (cron 트리거)
 │   └── logs/                 # 스크립트 실행 로그 (gitignore)
-├── docs/images/              # README 다이어그램 (Excalidraw PNG)
+├── docs/images/
+│   ├── excalidraw/           # 아키텍처·시퀀스 다이어그램 (Excalidraw PNG)
+│   └── screenshots/          # UI 스크린샷
 ├── docker-compose.yml        # 전체 서비스 오케스트레이션
 ├── turbo.json                # Turborepo 빌드 캐시 설정
 ├── pnpm-workspace.yaml       # pnpm 워크스페이스 (apps/*)
