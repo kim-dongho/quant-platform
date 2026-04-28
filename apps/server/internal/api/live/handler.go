@@ -1,6 +1,9 @@
-package controller
+// Package live — 라이브 전략 활성화/조회/중지 프록시 핸들러.
+package live
 
 import (
+	"quant-server/internal/proxy"
+
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -13,7 +16,7 @@ import (
 // @Failure      500  {object}  map[string]string
 // @Router       /live/strategy [get]
 func GetLiveStrategy(c *fiber.Ctx) error {
-	return proxyGet(c, engineBase+"/live/strategy")
+	return proxy.Get(c, proxy.EngineBase+"/live/strategy")
 }
 
 // UpsertLiveStrategy godoc
@@ -28,7 +31,7 @@ func GetLiveStrategy(c *fiber.Ctx) error {
 // @Failure      500      {object}  map[string]string
 // @Router       /live/strategy [post]
 func UpsertLiveStrategy(c *fiber.Ctx) error {
-	return proxyPost(c, engineBase+"/live/strategy")
+	return proxy.Post(c, proxy.EngineBase+"/live/strategy")
 }
 
 // StopLiveStrategy godoc
@@ -40,15 +43,5 @@ func UpsertLiveStrategy(c *fiber.Ctx) error {
 // @Failure      500  {object}  map[string]string
 // @Router       /live/strategy [delete]
 func StopLiveStrategy(c *fiber.Ctx) error {
-	return proxyDelete(c, engineBase+"/live/strategy")
-}
-
-func proxyDelete(c *fiber.Ctx, url string) error {
-	agent := fiber.Delete(url)
-	status, body, errs := agent.Bytes()
-	if len(errs) > 0 {
-		return c.Status(500).JSON(fiber.Map{"error": "Engine connection failed"})
-	}
-	c.Set("Content-Type", "application/json")
-	return c.Status(status).Send(body)
+	return proxy.Delete(c, proxy.EngineBase+"/live/strategy")
 }

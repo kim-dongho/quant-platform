@@ -1,12 +1,12 @@
 basePath: /api
 definitions:
-  internal_controller.StockItem:
+  internal_api_stocks.StockItem:
     properties:
       symbol:
         example: NVDA
         type: string
     type: object
-  internal_controller.StockSearchItem:
+  internal_api_stocks.StockSearchItem:
     properties:
       name:
         example: Rocket Lab Corporation
@@ -652,7 +652,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/internal_controller.StockItem'
+              $ref: '#/definitions/internal_api_stocks.StockItem'
             type: array
         "500":
           description: Internal Server Error
@@ -684,7 +684,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/internal_controller.StockSearchItem'
+              $ref: '#/definitions/internal_api_stocks.StockSearchItem'
             type: array
         "500":
           description: Internal Server Error

@@ -1,10 +1,11 @@
-package controller
+// Package paper — 모의투자(KIS API) 잔고/주문/시세 프록시 핸들러.
+package paper
 
 import (
+	"quant-server/internal/proxy"
+
 	"github.com/gofiber/fiber/v2"
 )
-
-const engineBase = "http://engine:8000"
 
 // GetPaperBalance godoc
 // @Summary      모의투자 계좌 잔고 조회 (KIS API 엔진 프록시)
@@ -16,7 +17,7 @@ const engineBase = "http://engine:8000"
 // @Failure      500  {object}  map[string]string
 // @Router       /paper/balance [get]
 func GetPaperBalance(c *fiber.Ctx) error {
-	return proxyGet(c, engineBase+"/paper/balance")
+	return proxy.Get(c, proxy.EngineBase+"/paper/balance")
 }
 
 // PlacePaperOrder godoc
@@ -31,7 +32,7 @@ func GetPaperBalance(c *fiber.Ctx) error {
 // @Failure      500      {object}  map[string]string
 // @Router       /paper/orders [post]
 func PlacePaperOrder(c *fiber.Ctx) error {
-	return proxyPost(c, engineBase+"/paper/orders")
+	return proxy.Post(c, proxy.EngineBase+"/paper/orders")
 }
 
 // GetPaperOrders godoc
@@ -45,11 +46,11 @@ func PlacePaperOrder(c *fiber.Ctx) error {
 // @Failure      500         {object}  map[string]string
 // @Router       /paper/orders [get]
 func GetPaperOrders(c *fiber.Ctx) error {
-	url := engineBase + "/paper/orders"
+	url := proxy.EngineBase + "/paper/orders"
 	if qs := string(c.Request().URI().QueryString()); qs != "" {
 		url = url + "?" + qs
 	}
-	return proxyGet(c, url)
+	return proxy.Get(c, url)
 }
 
 // GetPaperQuote godoc
@@ -63,27 +64,5 @@ func GetPaperOrders(c *fiber.Ctx) error {
 // @Router       /paper/quote/{symbol} [get]
 func GetPaperQuote(c *fiber.Ctx) error {
 	symbol := c.Params("symbol")
-	return proxyGet(c, engineBase+"/paper/quote/"+symbol)
-}
-
-func proxyGet(c *fiber.Ctx, url string) error {
-	agent := fiber.Get(url)
-	status, body, errs := agent.Bytes()
-	if len(errs) > 0 {
-		return c.Status(500).JSON(fiber.Map{"error": "Engine connection failed"})
-	}
-	c.Set("Content-Type", "application/json")
-	return c.Status(status).Send(body)
-}
-
-func proxyPost(c *fiber.Ctx, url string) error {
-	agent := fiber.Post(url)
-	agent.Body(c.Body())
-	agent.Set("Content-Type", "application/json")
-	status, body, errs := agent.Bytes()
-	if len(errs) > 0 {
-		return c.Status(500).JSON(fiber.Map{"error": "Engine connection failed"})
-	}
-	c.Set("Content-Type", "application/json")
-	return c.Status(status).Send(body)
+	return proxy.Get(c, proxy.EngineBase+"/paper/quote/"+symbol)
 }

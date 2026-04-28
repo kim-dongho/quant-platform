@@ -1,0 +1,17 @@
+package portfolio
+
+import "github.com/gofiber/fiber/v2"
+
+// RegisterRoutes — /portfolio 도메인의 모든 라우트를 api 그룹에 등록.
+func RegisterRoutes(api fiber.Router) {
+	g := api.Group("/portfolio")
+	g.Get("/rules", ListPortfolioRules)
+	g.Post("/rules", CreatePortfolioRule)
+	g.Put("/rules/:id", UpdatePortfolioRule)
+	g.Delete("/rules/:id", DeletePortfolioRule)
+	g.Post("/screen", ScreenPortfolio)
+	g.Post("/backtest", BacktestPortfolio)
+	g.Post("/discover", DiscoverPortfolio)
+	g.Post("/discover/start", StartDiscover)
+	g.Get("/discover/status/:job_id", DiscoverStatus)
+}

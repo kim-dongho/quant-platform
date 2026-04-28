@@ -1,4 +1,5 @@
-package controller
+// Package backtest — 단일 종목 백테스트 핸들러 (엔진 프록시).
+package backtest
 
 import (
 	"quant-server/internal/model"
@@ -23,7 +24,6 @@ func RunBacktest(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
 	}
 
-	// Python 엔진(FastAPI)으로 전달
 	agent := fiber.Post("http://engine:8000/backtest")
 	agent.JSON(req)
 

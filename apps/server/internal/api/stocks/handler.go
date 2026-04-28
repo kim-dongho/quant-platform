@@ -1,20 +1,23 @@
-package controller
+// Package stocks — 주식 시세/리스트/검색 핸들러. 일부는 DB 직접 조회, 일부는 엔진 프록시.
+package stocks
 
 import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"quant-server/internal/database"
-	"quant-server/internal/model"
 	"strconv"
 	"strings"
+
+	"quant-server/internal/database"
+	"quant-server/internal/model"
+	"quant-server/internal/proxy"
 
 	"github.com/gofiber/fiber/v2"
 )
 
-// Python 엔진에 데이터 수집 요청을 보내는 헬퍼 함수
+// triggerIngestion — Python 엔진에 데이터 수집 요청 송신.
 func triggerIngestion(symbol string) error {
-	url := fmt.Sprintf("http://engine:8000/ingest/%s", symbol)
+	url := fmt.Sprintf("%s/ingest/%s", proxy.EngineBase, symbol)
 
 	resp, err := http.Post(url, "application/json", nil)
 	if err != nil {
@@ -28,9 +31,9 @@ func triggerIngestion(symbol string) error {
 	return nil
 }
 
-// 엔진에서 NASDAQ 기준 가장 최근 마감 세션 날짜(YYYY-MM-DD)를 조회
+// getLastTradingDay — 엔진에서 NASDAQ 기준 가장 최근 마감 세션 날짜(YYYY-MM-DD)를 조회.
 func getLastTradingDay() (string, error) {
-	resp, err := http.Get("http://engine:8000/market/last_session")
+	resp, err := http.Get(proxy.EngineBase + "/market/last_session")
 	if err != nil {
 		return "", err
 	}
@@ -69,10 +72,8 @@ func GetStockHistory(c *fiber.Ctx) error {
 
 	db := database.DB
 
-	// 시세 데이터 DB 조회
 	var history []model.MarketData
 
-	// 쿼리문 정의 (재사용을 위해 변수에 할당하는 방식도 가능하지만, 직관적으로 반복 작성함)
 	db.Table("market_data").
 		Select("DISTINCT ON (time) TO_CHAR(time, 'YYYY-MM-DD') as time, open, high, low, close, volume").
 		Where("symbol = ?", symbol).
@@ -83,17 +84,14 @@ func GetStockHistory(c *fiber.Ctx) error {
 	if len(history) == 0 {
 		fmt.Printf("🔍 No data for %s in DB. Triggering ingestion...\n", symbol)
 
-		// Python 엔진 호출
 		if err := triggerIngestion(symbol); err != nil {
 			fmt.Printf("❌ Ingestion failed: %v\n", err)
-			// 수집도 실패하면 진짜 없는 종목임
 			return c.Status(404).JSON(fiber.Map{
 				"error":   "Symbol not found or data unavailable",
 				"details": err.Error(),
 			})
 		}
 
-		// 수집 완료 후 DB 다시 조회
 		db.Table("market_data").
 			Select("DISTINCT ON (time) TO_CHAR(time, 'YYYY-MM-DD') as time, open, high, low, close, volume").
 			Where("symbol = ?", symbol).
@@ -101,7 +99,6 @@ func GetStockHistory(c *fiber.Ctx) error {
 			Find(&history)
 
 		if len(history) == 0 {
-			// 저장했다고 했는데 조회 안되면 시스템 에러
 			return c.Status(500).JSON(fiber.Map{"error": "Data ingested but retrieval failed"})
 		}
 	} else {
@@ -110,7 +107,6 @@ func GetStockHistory(c *fiber.Ctx) error {
 		if lastSession, err := getLastTradingDay(); err == nil && lastBar < lastSession {
 			fmt.Printf("🔄 Data stale for %s (last bar: %s, last session: %s). Refreshing...\n", symbol, lastBar, lastSession)
 			if ingestErr := triggerIngestion(symbol); ingestErr != nil {
-				// 백필 실패해도 기존 데이터는 반환
 				fmt.Printf("⚠️ Backfill failed, returning stale data: %v\n", ingestErr)
 			} else {
 				history = history[:0]
@@ -123,14 +119,12 @@ func GetStockHistory(c *fiber.Ctx) error {
 		}
 	}
 
-	// 회사명 조회
 	var companyName string
 	_ = db.Table("stocks").Select("name").Where("symbol = ?", symbol).Row().Scan(&companyName)
 	if companyName == "" {
 		companyName = symbol
 	}
 
-	// 최종 응답 구조 생성
 	response := model.StockHistoryResponse{
 		Symbol:      symbol,
 		CompanyName: companyName,
@@ -153,10 +147,8 @@ type StockItem struct {
 // @Failure      500  {object}  map[string]string
 // @Router       /stocks/list [get]
 func GetStockList(c *fiber.Ctx) error {
-	// 1. 중복 제거된 종목 심볼 가져오기
 	var symbols []string
 
-	// GORM 예시: market_data 테이블에서 symbol 컬럼만 distinct로 가져옴
 	result := database.DB.Table("market_data").
 		Select("DISTINCT symbol").
 		Order("symbol ASC").
@@ -169,13 +161,11 @@ func GetStockList(c *fiber.Ctx) error {
 		})
 	}
 
-	// 2. 프론트엔드 포맷에 맞게 변환 (Array of Objects)
 	response := make([]StockItem, len(symbols))
 	for i, s := range symbols {
 		response[i] = StockItem{Symbol: s}
 	}
 
-	// 3. JSON 응답
 	return c.JSON(response)
 }
 

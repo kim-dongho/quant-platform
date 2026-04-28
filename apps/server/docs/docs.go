@@ -771,7 +771,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/internal_controller.StockItem"
+                                "$ref": "#/definitions/internal_api_stocks.StockItem"
                             }
                         }
                     },
@@ -818,7 +818,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/internal_controller.StockSearchItem"
+                                "$ref": "#/definitions/internal_api_stocks.StockSearchItem"
                             }
                         }
                     },
@@ -895,7 +895,7 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "internal_controller.StockItem": {
+        "internal_api_stocks.StockItem": {
             "type": "object",
             "properties": {
                 "symbol": {
@@ -904,7 +904,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_controller.StockSearchItem": {
+        "internal_api_stocks.StockSearchItem": {
             "type": "object",
             "properties": {
                 "name": {

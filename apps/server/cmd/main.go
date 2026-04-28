@@ -2,8 +2,8 @@ package main
 
 import (
 	_ "quant-server/docs"
+	"quant-server/internal/api"
 	"quant-server/internal/database"
-	"quant-server/internal/router"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -27,8 +27,8 @@ func main() {
 
 	app.Get("/swagger/*", swagger.HandlerDefault)
 
-	// 라우터 설정
-	router.SetupRoutes(app)
+	// 라우터 설정 — 도메인별 api 패키지를 모아 /api 그룹에 등록
+	api.Setup(app)
 
 	// 서버 실행
 	app.Listen(":8080")

@@ -1,4 +1,5 @@
-package controller
+// Package portfolio — 포트폴리오 룰셋 CRUD 및 스크리닝/백테스트/탐색 프록시 핸들러.
+package portfolio
 
 import (
 	"strconv"
@@ -6,6 +7,7 @@ import (
 
 	"quant-server/internal/database"
 	"quant-server/internal/model"
+	"quant-server/internal/proxy"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -115,7 +117,7 @@ func DeletePortfolioRule(c *fiber.Ctx) error {
 // @Failure      500      {object}  map[string]string
 // @Router       /portfolio/screen [post]
 func ScreenPortfolio(c *fiber.Ctx) error {
-	return proxyToEngine(c, "http://engine:8000/portfolio/screen")
+	return proxy.Post(c, proxy.EngineBase+"/portfolio/screen")
 }
 
 // BacktestPortfolio godoc
@@ -128,7 +130,7 @@ func ScreenPortfolio(c *fiber.Ctx) error {
 // @Failure      500      {object}  map[string]string
 // @Router       /portfolio/backtest [post]
 func BacktestPortfolio(c *fiber.Ctx) error {
-	return proxyToEngine(c, "http://engine:8000/portfolio/backtest")
+	return proxy.Post(c, proxy.EngineBase+"/portfolio/backtest")
 }
 
 // DiscoverPortfolio godoc
@@ -143,7 +145,7 @@ func BacktestPortfolio(c *fiber.Ctx) error {
 // @Router       /portfolio/discover [post]
 func DiscoverPortfolio(c *fiber.Ctx) error {
 	// Grid search는 n_clauses=2 시 수분 소요되므로 timeout을 넉넉히.
-	return proxyToEngineWithTimeout(c, "http://engine:8000/portfolio/discover", 10*time.Minute)
+	return proxy.PostWithTimeout(c, proxy.EngineBase+"/portfolio/discover", 10*time.Minute)
 }
 
 // StartDiscover godoc
@@ -157,7 +159,7 @@ func DiscoverPortfolio(c *fiber.Ctx) error {
 // @Failure      500      {object}  map[string]string
 // @Router       /portfolio/discover/start [post]
 func StartDiscover(c *fiber.Ctx) error {
-	return proxyToEngine(c, "http://engine:8000/portfolio/discover/start")
+	return proxy.Post(c, proxy.EngineBase+"/portfolio/discover/start")
 }
 
 // DiscoverStatus godoc
@@ -171,39 +173,5 @@ func StartDiscover(c *fiber.Ctx) error {
 // @Router       /portfolio/discover/status/{job_id} [get]
 func DiscoverStatus(c *fiber.Ctx) error {
 	jobID := c.Params("job_id")
-	url := "http://engine:8000/portfolio/discover/status/" + jobID
-	agent := fiber.Get(url)
-	status, body, errs := agent.Bytes()
-	if len(errs) > 0 {
-		return c.Status(500).JSON(fiber.Map{"error": "Engine connection failed"})
-	}
-	c.Set("Content-Type", "application/json")
-	return c.Status(status).Send(body)
-}
-
-func proxyToEngine(c *fiber.Ctx, url string) error {
-	agent := fiber.Post(url)
-	agent.Body(c.Body())
-	agent.Set("Content-Type", "application/json")
-
-	status, body, errs := agent.Bytes()
-	if len(errs) > 0 {
-		return c.Status(500).JSON(fiber.Map{"error": "Engine connection failed"})
-	}
-	c.Set("Content-Type", "application/json")
-	return c.Status(status).Send(body)
-}
-
-func proxyToEngineWithTimeout(c *fiber.Ctx, url string, timeout time.Duration) error {
-	agent := fiber.Post(url)
-	agent.Body(c.Body())
-	agent.Set("Content-Type", "application/json")
-	agent.Timeout(timeout)
-
-	status, body, errs := agent.Bytes()
-	if len(errs) > 0 {
-		return c.Status(500).JSON(fiber.Map{"error": "Engine connection failed"})
-	}
-	c.Set("Content-Type", "application/json")
-	return c.Status(status).Send(body)
+	return proxy.Get(c, proxy.EngineBase+"/portfolio/discover/status/"+jobID)
 }
