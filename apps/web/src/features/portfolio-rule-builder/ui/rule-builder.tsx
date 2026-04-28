@@ -2,18 +2,18 @@
 
 import { useMemo, useState } from 'react';
 
-import { FACTOR_OPTIONS, OPS, UNIVERSE_OPTIONS } from '@/entities/portfolio/model/factors';
+import { UNIVERSE_OPTIONS } from '@/entities/portfolio/model/factors';
 import {
   STRATEGY_TEMPLATES,
   findActiveTemplate,
 } from '@/entities/portfolio/model/strategy-templates';
-import type {
-  Clause,
-  ExitPolicy,
-  FactorKey,
-  FactorOp,
-  RuleConfig,
-} from '@/entities/portfolio/model/types';
+import type { Clause, ExitPolicy, FactorKey, RuleConfig } from '@/entities/portfolio/model/types';
+
+import { EXIT_CARD_META, type ExitCardMeta } from '../model/exit-meta';
+import { AddRuleMenu } from './add-rule-menu';
+import { ExitCard } from './exit-card';
+import { FactorCard } from './factor-card';
+import { TemplateMenu } from './template-menu';
 
 interface Props {
   config: RuleConfig;
@@ -22,77 +22,6 @@ interface Props {
   onExitPolicyChange: (p: ExitPolicy | null) => void;
   onReset?: () => void;
 }
-
-type ExitKey = 'stop_loss' | 'take_profit' | 'trailing_stop' | 'time_exit';
-
-interface ExitCardMeta {
-  key: ExitKey;
-  field: keyof ExitPolicy;
-  label: string;
-  icon: string;
-  unit: string;
-  defaultValue: number;
-  step: number;
-  min: number;
-  max: number;
-  sign: 'negative' | 'positive' | 'positive_int';
-  hint: string;
-}
-
-const EXIT_CARD_META: ExitCardMeta[] = [
-  {
-    key: 'stop_loss',
-    field: 'stop_loss_pct',
-    label: '손절 (Stop Loss)',
-    icon: 'south_east',
-    unit: '%',
-    defaultValue: -5,
-    step: 0.5,
-    min: -30,
-    max: 0,
-    sign: 'negative',
-    hint: '진입가 대비 이 % 이상 떨어지면 즉시 매도',
-  },
-  {
-    key: 'take_profit',
-    field: 'take_profit_pct',
-    label: '익절 (Take Profit)',
-    icon: 'north_east',
-    unit: '%',
-    defaultValue: 10,
-    step: 0.5,
-    min: 0,
-    max: 100,
-    sign: 'positive',
-    hint: '진입가 대비 이 % 이상 오르면 즉시 매도',
-  },
-  {
-    key: 'trailing_stop',
-    field: 'trailing_stop_pct',
-    label: '추적 손절 (Trailing Stop)',
-    icon: 'trending_down',
-    unit: '%',
-    defaultValue: -8,
-    step: 0.5,
-    min: -30,
-    max: 0,
-    sign: 'negative',
-    hint: '보유 중 최고가 대비 이 % 이상 떨어지면 매도',
-  },
-  {
-    key: 'time_exit',
-    field: 'time_exit_days',
-    label: '보유 기간 (Time Exit)',
-    icon: 'schedule',
-    unit: '일',
-    defaultValue: 20,
-    step: 1,
-    min: 1,
-    max: 365,
-    sign: 'positive_int',
-    hint: '진입 후 이 기간 지나면 종가 청산',
-  },
-];
 
 export const RuleBuilder = ({
   config,
@@ -109,9 +38,7 @@ export const RuleBuilder = ({
     [config.clauses, exitPolicy],
   );
 
-  // 현재 사용된 진입 팩터 set (중복 방지)
   const usedFactors = new Set(config.clauses.map((c) => c.factor));
-  // 현재 켜져있는 exit 종류 set
   const activeExits = new Set(
     EXIT_CARD_META.filter((m) => (exitPolicy?.[m.field] ?? null) !== null).map((m) => m.key),
   );
@@ -137,14 +64,12 @@ export const RuleBuilder = ({
   };
 
   const addFactorClause = (factor: FactorKey) => {
-    const step = FACTOR_OPTIONS.find((f) => f.key === factor)?.step ?? 0.1;
     const defaultValue = factor === 'rsi_14' ? 30 : factor.startsWith('sma') ? 0 : 0.05;
     onChange({
       ...config,
       clauses: [...config.clauses, { factor, op: '<', value: defaultValue } as Clause],
     });
     setAddMenuOpen(false);
-    void step;
   };
 
   const updateExit = (field: keyof ExitPolicy, value: number | null) => {
@@ -216,7 +141,7 @@ export const RuleBuilder = ({
         </div>
       </div>
 
-      {/* Universe + 보유 종목 수 — 좁은 컬럼을 위해 두 줄로 */}
+      {/* Universe + 보유 종목 수 */}
       <div className="border-outline-variant/30 flex flex-col gap-2 border-b pb-3">
         <label className="flex items-center justify-between gap-2">
           <span className="text-on-surface-variant shrink-0 text-[11px]">투자 대상</span>
@@ -267,7 +192,6 @@ export const RuleBuilder = ({
           </p>
         )}
 
-        {/* 진입 팩터 카드들 */}
         {config.clauses.map((c, idx) => (
           <FactorCard
             key={`clause-${idx}`}
@@ -277,7 +201,6 @@ export const RuleBuilder = ({
           />
         ))}
 
-        {/* Exit 카드들 */}
         {EXIT_CARD_META.map((meta) => {
           const value = exitPolicy?.[meta.field] as number | null | undefined;
           if (value == null) return null;
@@ -306,247 +229,3 @@ export const RuleBuilder = ({
     </div>
   );
 };
-
-// ─────────────────────────────────────────────────────────────
-// 카드 컴포넌트 — 진입 팩터
-// ─────────────────────────────────────────────────────────────
-const FactorCard = ({
-  clause,
-  onChange,
-  onRemove,
-}: {
-  clause: Clause;
-  onChange: (patch: Partial<Clause>) => void;
-  onRemove: () => void;
-}) => {
-  const opt = FACTOR_OPTIONS.find((f) => f.key === clause.factor);
-  return (
-    <RuleCardShell
-      icon="show_chart"
-      title={opt?.label ?? clause.factor}
-      subtitle={opt?.hint ?? '진입 조건'}
-      onRemove={onRemove}
-    >
-      <div className="flex items-center gap-1.5">
-        <select
-          value={clause.factor}
-          onChange={(e) => onChange({ factor: e.target.value as FactorKey })}
-          className="border-outline-variant/50 bg-surface focus:border-primary focus:ring-primary min-w-0 flex-1 rounded-md border px-2 py-1 font-mono text-xs outline-none focus:ring-1"
-        >
-          {FACTOR_OPTIONS.map((f) => (
-            <option key={f.key} value={f.key}>
-              {f.label}
-            </option>
-          ))}
-        </select>
-        <select
-          value={clause.op}
-          onChange={(e) => onChange({ op: e.target.value as FactorOp })}
-          className="border-outline-variant/50 bg-surface focus:border-primary focus:ring-primary w-12 shrink-0 rounded-md border px-1 py-1 text-center font-mono text-xs outline-none focus:ring-1"
-        >
-          {OPS.map((op) => (
-            <option key={op} value={op}>
-              {op}
-            </option>
-          ))}
-        </select>
-        <input
-          type="number"
-          value={clause.value}
-          step={opt?.step ?? 0.1}
-          onChange={(e) => onChange({ value: Number(e.target.value) })}
-          className="border-outline-variant/50 bg-surface focus:border-primary focus:ring-primary w-20 shrink-0 rounded-md border px-1.5 py-1 text-right font-mono text-xs tabular-nums outline-none focus:ring-1"
-        />
-      </div>
-    </RuleCardShell>
-  );
-};
-
-// ─────────────────────────────────────────────────────────────
-// 카드 컴포넌트 — 청산 조건 (공용)
-// ─────────────────────────────────────────────────────────────
-const ExitCard = ({
-  meta,
-  value,
-  onChange,
-  onRemove,
-}: {
-  meta: ExitCardMeta;
-  value: number;
-  onChange: (v: number) => void;
-  onRemove: () => void;
-}) => {
-  return (
-    <RuleCardShell icon={meta.icon} title={meta.label} subtitle={meta.hint} onRemove={onRemove}>
-      <div className="flex items-center gap-2">
-        <input
-          type="number"
-          value={value}
-          step={meta.step}
-          min={meta.min}
-          max={meta.max}
-          onChange={(e) => onChange(Number(e.target.value))}
-          className="border-outline-variant/50 bg-surface focus:border-primary focus:ring-primary w-24 rounded-md border px-2 py-1 text-right font-mono text-sm tabular-nums outline-none focus:ring-1"
-        />
-        <span className="text-on-surface-variant text-xs">{meta.unit}</span>
-      </div>
-    </RuleCardShell>
-  );
-};
-
-// ─────────────────────────────────────────────────────────────
-// 공용 카드 껍데기
-// ─────────────────────────────────────────────────────────────
-const RuleCardShell = ({
-  icon,
-  title,
-  subtitle,
-  onRemove,
-  children,
-}: {
-  icon: string;
-  title: string;
-  subtitle?: string;
-  onRemove: () => void;
-  children: React.ReactNode;
-}) => (
-  <div className="border-outline-variant/30 bg-surface flex flex-col gap-2 rounded-lg border p-3 shadow-[0_1px_2px_rgba(0,0,0,0.02)] transition-shadow hover:shadow-[0_2px_4px_rgba(0,0,0,0.04)]">
-    <div className="flex items-start justify-between gap-2">
-      <div className="flex items-start gap-2">
-        <span className="material-symbols-outlined text-primary mt-0.5 shrink-0 text-[18px]">
-          {icon}
-        </span>
-        <div className="flex flex-col">
-          <span className="text-on-surface text-[13px] font-semibold">{title}</span>
-          {subtitle && (
-            <span className="text-on-surface-variant text-[10px] leading-snug">{subtitle}</span>
-          )}
-        </div>
-      </div>
-      <button
-        type="button"
-        onClick={onRemove}
-        aria-label="삭제"
-        className="text-on-surface-variant hover:bg-error-container hover:text-error flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition-colors"
-      >
-        <span className="material-symbols-outlined text-[16px]">close</span>
-      </button>
-    </div>
-    {children}
-  </div>
-);
-
-// ─────────────────────────────────────────────────────────────
-// 조건 추가 메뉴
-// ─────────────────────────────────────────────────────────────
-const AddRuleMenu = ({
-  usedFactors,
-  activeExits,
-  onAddFactor,
-  onAddExit,
-  onClose,
-}: {
-  usedFactors: Set<string>;
-  activeExits: Set<ExitKey>;
-  onAddFactor: (factor: FactorKey) => void;
-  onAddExit: (meta: ExitCardMeta) => void;
-  onClose: () => void;
-}) => (
-  <>
-    <div className="fixed inset-0 z-30" onClick={onClose} />
-    <div className="border-outline-variant/50 bg-surface-container-lowest absolute top-full right-0 z-40 mt-1 flex max-h-[70vh] w-64 flex-col overflow-y-auto rounded-lg border shadow-lg">
-      <div className="border-outline-variant/30 bg-surface-container-low text-on-surface-variant sticky top-0 border-b px-3 py-1.5 text-[10px] font-semibold tracking-wider uppercase">
-        매수 조건 (진입 팩터)
-      </div>
-      {FACTOR_OPTIONS.map((f) => {
-        const disabled = usedFactors.has(f.key);
-        return (
-          <button
-            key={f.key}
-            type="button"
-            disabled={disabled}
-            onClick={() => onAddFactor(f.key)}
-            className="hover:bg-surface-container-low flex w-full flex-col items-start px-3 py-2 text-left disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <span className="text-on-surface text-xs font-semibold">{f.label}</span>
-            {f.hint && <span className="text-on-surface-variant text-[10px]">{f.hint}</span>}
-          </button>
-        );
-      })}
-
-      <div className="border-outline-variant/30 bg-surface-container-low text-on-surface-variant border-y px-3 py-1.5 text-[10px] font-semibold tracking-wider uppercase">
-        매도 조건
-      </div>
-      {EXIT_CARD_META.map((m) => {
-        const disabled = activeExits.has(m.key);
-        return (
-          <button
-            key={m.key}
-            type="button"
-            disabled={disabled}
-            onClick={() => onAddExit(m)}
-            className="hover:bg-surface-container-low flex w-full items-start gap-2 px-3 py-2 text-left disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <span className="material-symbols-outlined text-primary mt-0.5 text-[16px]">
-              {m.icon}
-            </span>
-            <div className="flex flex-col">
-              <span className="text-on-surface text-xs font-semibold">{m.label}</span>
-              <span className="text-on-surface-variant text-[10px]">{m.hint}</span>
-            </div>
-          </button>
-        );
-      })}
-    </div>
-  </>
-);
-
-// ─────────────────────────────────────────────────────────────
-// 템플릿 메뉴
-// ─────────────────────────────────────────────────────────────
-const TemplateMenu = ({
-  onSelect,
-  onClose,
-  activeId,
-}: {
-  onSelect: (id: string) => void;
-  onClose: () => void;
-  activeId?: string;
-}) => (
-  <>
-    <div className="fixed inset-0 z-30" onClick={onClose} />
-    <div className="border-outline-variant/50 bg-surface-container-lowest absolute top-full right-0 z-40 mt-1 flex max-h-[70vh] w-72 flex-col overflow-y-auto rounded-lg border shadow-lg">
-      <div className="border-outline-variant/30 bg-surface-container-low text-on-surface-variant sticky top-0 border-b px-3 py-1.5 text-[10px] font-semibold tracking-wider uppercase">
-        전략 템플릿 — 선택 시 현재 조건을 덮어씁니다
-      </div>
-      {STRATEGY_TEMPLATES.map((t) => {
-        const active = t.id === activeId;
-        return (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => onSelect(t.id)}
-            className={`hover:bg-surface-container-low flex w-full items-start gap-2 px-3 py-2 text-left ${
-              active ? 'bg-primary-fixed/30' : ''
-            }`}
-          >
-            <span className="material-symbols-outlined text-primary mt-0.5 shrink-0 text-[18px]">
-              {t.icon}
-            </span>
-            <div className="flex min-w-0 flex-col">
-              <span className="text-on-surface text-xs font-semibold">{t.name}</span>
-              <span className="text-on-surface-variant text-[10px] leading-snug">
-                {t.description}
-              </span>
-            </div>
-            {active && (
-              <span className="material-symbols-outlined text-primary ml-auto text-[16px]">
-                check
-              </span>
-            )}
-          </button>
-        );
-      })}
-    </div>
-  </>
-);
