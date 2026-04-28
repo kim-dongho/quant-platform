@@ -7,13 +7,13 @@ import { StockChart } from '@/entities/stock/ui/stock-chart';
 import { StockLogo } from '@/shared/ui/stock-logo';
 
 import { useDashboardLogic } from '../lib/use-dashboard-logic';
-import { useDashboardUrlSync } from '../lib/use-url-sync';
-import { useDashboardStore } from '../model/dashborad-store';
+import { useSymbolUrlSync } from '../lib/use-symbol-url-sync';
+import { useDashboardStore } from '../model/dashboard-store';
 
 // /backtest = 단순 차트 뷰어. 종목 검색 + 일봉 차트만 제공.
-// 전략 설계·백테스트는 /strategies, 라이브 운영은 /live에서.
-export const StockDashboardWidget = () => {
-  useDashboardUrlSync();
+// 전략 설계·백테스트는 /portfolio, 라이브 운영은 /live.
+export const StockDashboardPage = () => {
+  useSymbolUrlSync();
 
   const { symbol, setSymbol } = useDashboardStore();
   const { mergedData, companyName, isLoading } = useDashboardLogic();
