@@ -14,7 +14,7 @@ import json
 import sys
 import time
 
-from src.service.strategy_discover import (
+from src.service.backtest import (
     DEFAULT_FACTORS,
     DEFAULT_OPS,
     DEFAULT_PERCENTILES,

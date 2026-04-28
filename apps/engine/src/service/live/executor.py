@@ -21,11 +21,11 @@ from sqlalchemy import text
 from datetime import date
 
 from src.core.database import engine
-from src.service.kis_client import KisClient, KisError, get_kis_client
-from src.service.live_strategy import get_active_strategy
-from src.service.live_trades import record_entry, record_exit, sync_with_holdings
-from src.service.portfolio_backtest import ExitPolicy
-from src.service.screener import run_screen
+from src.service.kis import KisClient, KisError, get_kis_client
+from src.service.live.strategy import get_active_strategy
+from src.service.live.trades import record_entry, record_exit, sync_with_holdings
+from src.service.backtest import ExitPolicy
+from src.service.factor import run_screen
 
 # 시가 갭이 이 이상이면 진입 스킵 (양방향).
 # 어제 종가 시그널 ↔ 실제 진입가 괴리를 줄이는 가장 효과적인 필터.
@@ -170,7 +170,7 @@ def run_once(dry_run: bool = False) -> dict[str, Any]:
     # dry_run 시에도 sync는 수행해야 평가가 의미 있음 (trade 로그는 진입일을 보존).
     if dry_run:
         # dry-run에선 DB 수정 안 함 — peak/sync 효과만 in-memory로
-        from src.service.live_trades import get_open_trades
+        from src.service.live.trades import get_open_trades
 
         open_trades_list = get_open_trades(strategy["id"])
         open_trades = {t["symbol"]: t for t in open_trades_list}

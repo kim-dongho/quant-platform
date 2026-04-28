@@ -5,7 +5,7 @@ from sqlalchemy import text
 
 from src.core.config import UNIVERSE_NAMES, get_universe
 from src.core.database import engine
-from src.service.factors import FACTOR_COLUMNS
+from src.service.factor.compute import FACTOR_COLUMNS
 
 # 'all' 유니버스: DB에 데이터가 있는 모든 symbol을 동적으로 반환.
 ALL_UNIVERSE = "all"

@@ -33,7 +33,7 @@ from src.core.config import (
     is_krx_symbol,
 )
 from src.core.database import engine
-from src.service.factors import (
+from src.service.factor import (
     compute_factors_for_symbol,
     get_factor_max_times,
     get_market_max_times,

@@ -119,7 +119,7 @@ def save_krx_to_db(symbol: str) -> None:
         return
 
     try:
-        from src.service.factors import compute_factors_for_symbol
+        from src.service.factor import compute_factors_for_symbol
 
         n = compute_factors_for_symbol(symbol)
         if n:

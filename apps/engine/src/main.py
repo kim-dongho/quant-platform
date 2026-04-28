@@ -2,7 +2,7 @@ import uvicorn
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 
-from src.api.routes import router
+from src.api.routers import api_router
 from src.core.database import init_db
 
 
@@ -19,8 +19,8 @@ async def lifespan(app: FastAPI):
 # FastAPI 앱 생성
 app = FastAPI(lifespan=lifespan)
 
-# API 라우터 등록
-app.include_router(router)
+# API 라우터 등록 — 도메인별 router 통합본
+app.include_router(api_router)
 
 if __name__ == "__main__":
     print("🔥 Starting Quant Engine API Server...")

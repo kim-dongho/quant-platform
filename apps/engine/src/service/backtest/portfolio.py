@@ -34,8 +34,8 @@ def _safe_float(v, default: float = 0.0) -> float:
     return f if math.isfinite(f) else default
 
 from src.core.database import engine
-from src.service.factors import FACTOR_COLUMNS
-from src.service.screener import (
+from src.service.factor import FACTOR_COLUMNS
+from src.service.factor import (
     ScreenError,
     _resolve_universe,
     _validate_clauses,

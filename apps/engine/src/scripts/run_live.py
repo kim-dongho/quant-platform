@@ -15,7 +15,7 @@ import json
 import sys
 from datetime import datetime
 
-from src.service.live_executor import run_once
+from src.service.live import run_once
 
 
 def main() -> int:

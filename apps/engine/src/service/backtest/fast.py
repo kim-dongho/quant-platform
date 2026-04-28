@@ -23,14 +23,14 @@ import pandas as pd
 from sqlalchemy import text
 
 from src.core.database import engine
-from src.service.factors import FACTOR_COLUMNS
-from src.service.portfolio_backtest import (
+from src.service.factor import FACTOR_COLUMNS
+from src.service.backtest.portfolio import (
     _ensure_benchmark_data,
     _get_benchmark,
     _net_entry_price,
     _net_exit_price,
 )
-from src.service.screener import _resolve_universe
+from src.service.factor import _resolve_universe
 
 
 @dataclass

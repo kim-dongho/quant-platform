@@ -14,7 +14,7 @@ def save_to_db(ticker: str):
       - 그 외 → yfinance (미국)
     """
     if is_krx_symbol(ticker):
-        from src.service.ingest_krx import save_krx_to_db
+        from src.service.ingest.krx import save_krx_to_db
         return save_krx_to_db(ticker)
 
     print(f"📥 Processing data for {ticker}...")
@@ -101,7 +101,7 @@ def save_to_db(ticker: str):
 
     # 시세 저장이 끝나면 팩터 precompute (포트폴리오 스크리닝용)
     try:
-        from src.service.factors import compute_factors_for_symbol
+        from src.service.factor import compute_factors_for_symbol
         n = compute_factors_for_symbol(ticker)
         if n:
             print(f"📊 Factors updated: {n} rows for {ticker}")

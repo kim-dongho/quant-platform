@@ -22,8 +22,8 @@ import pandas as pd
 from sqlalchemy import text
 
 from src.core.database import engine
-from src.service.fast_backtest import DataCache, fast_backtest
-from src.service.screener import _resolve_universe
+from src.service.backtest.fast import DataCache, fast_backtest
+from src.service.factor import _resolve_universe
 
 DEFAULT_FACTORS = [
     "rsi_14",
