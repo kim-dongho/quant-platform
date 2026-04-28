@@ -26,9 +26,13 @@ FACTOR_COLUMNS = [
     "rsi_14",
     "sma_20",
     "sma_50",
+    "sma_200",
     "vol_ratio_20d",
     "return_5d",
+    "price_vs_sma20",
     "price_vs_sma50",
+    "price_vs_sma200",
+    "sma20_vs_sma50",
 ]
 
 
@@ -55,10 +59,9 @@ def get_market_max_times(symbols: List[str]) -> Dict[str, object]:
         ).mappings().all()
     return {r["symbol"]: r["t"] for r in rows if r["symbol"] in wanted and r["t"] is not None}
 
-# SMA50 등 가장 긴 lookback 지표가 유효하려면 최소 50봉 + 여유가 필요.
-# 캘린더 60일은 주말/휴일 제외 시 trading day ~42봉이라 len(df) < 50 가드에 걸려
-# 증분 upsert가 조용히 0 rows 반환하는 버그가 있었다. 120일 ≈ 84 trading days로 여유 확보.
-_LOOKBACK_DAYS = 120
+# 가장 긴 lookback 지표(SMA200)가 정확히 계산되려면 최소 200봉 + 여유가 필요.
+# 캘린더 300일 ≈ 210 trading days로 SMA200 가드 통과.
+_LOOKBACK_DAYS = 300
 
 
 def _load_ohlcv(symbol: str, since=None) -> pd.DataFrame:
@@ -102,12 +105,16 @@ def _compute_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df["rsi_14"] = ta.rsi(df["close"], length=14)
     df["sma_20"] = df["close"].rolling(window=20).mean()
     df["sma_50"] = df["close"].rolling(window=50).mean()
+    df["sma_200"] = df["close"].rolling(window=200).mean()
 
     vol_sma_20 = df["volume"].rolling(window=20).mean()
     df["vol_ratio_20d"] = df["volume"] / vol_sma_20
 
     df["return_5d"] = df["close"].pct_change(periods=5)
+    df["price_vs_sma20"] = df["close"] / df["sma_20"] - 1
     df["price_vs_sma50"] = df["close"] / df["sma_50"] - 1
+    df["price_vs_sma200"] = df["close"] / df["sma_200"] - 1
+    df["sma20_vs_sma50"] = df["sma_20"] / df["sma_50"] - 1
     return df
 
 

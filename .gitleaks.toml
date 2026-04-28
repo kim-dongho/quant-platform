@@ -1,0 +1,13 @@
+# gitleaks config — default 룰 + 프로젝트 화이트리스트.
+# 자동 인식: 프로젝트 루트에 두면 husky pre-commit hook이 그대로 사용한다.
+
+title = "quant-project gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "false positives: 한글 metadata 문자열을 generic-api-key로 오인식"
+paths = [
+  '''apps/web/src/entities/portfolio/model/factors\.ts$''',
+]

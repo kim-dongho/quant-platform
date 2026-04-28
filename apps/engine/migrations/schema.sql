@@ -26,12 +26,22 @@ CREATE TABLE IF NOT EXISTS factors (
     rsi_14 DOUBLE PRECISION,
     sma_20 DOUBLE PRECISION,
     sma_50 DOUBLE PRECISION,
+    sma_200 DOUBLE PRECISION,
     vol_ratio_20d DOUBLE PRECISION,
     return_5d DOUBLE PRECISION,
+    price_vs_sma20 DOUBLE PRECISION,
     price_vs_sma50 DOUBLE PRECISION,
+    price_vs_sma200 DOUBLE PRECISION,
+    sma20_vs_sma50 DOUBLE PRECISION,
     CONSTRAINT factors_pk PRIMARY KEY (time, symbol),
     CONSTRAINT fk_factors_stocks FOREIGN KEY (symbol) REFERENCES stocks (symbol)
 );
+
+-- 기존 DB(이미 factors가 있는 환경)도 누락 컬럼을 자동 보강.
+ALTER TABLE factors ADD COLUMN IF NOT EXISTS sma_200 DOUBLE PRECISION;
+ALTER TABLE factors ADD COLUMN IF NOT EXISTS price_vs_sma20 DOUBLE PRECISION;
+ALTER TABLE factors ADD COLUMN IF NOT EXISTS price_vs_sma200 DOUBLE PRECISION;
+ALTER TABLE factors ADD COLUMN IF NOT EXISTS sma20_vs_sma50 DOUBLE PRECISION;
 
 CREATE INDEX IF NOT EXISTS ix_factors_symbol_time_desc ON factors (symbol, time DESC);
 CREATE INDEX IF NOT EXISTS ix_factors_time_desc ON factors (time DESC);
