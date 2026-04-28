@@ -75,36 +75,6 @@ Docker Compose 가 담당합니다.
 - **라이브 매매** — Engine 이 KIS API 로 주문·잔고를 호출. 트리거는
   `scripts/run-live.sh` (cron 또는 수동).
 
-<details>
-<summary>mermaid 원본</summary>
-
-```mermaid
-flowchart LR
-    Browser([Browser])
-
-    subgraph compose [docker-compose 내부]
-        Web["Next.js<br/>apps/web :3000"]
-        API["Go Fiber API<br/>apps/server :8080"]
-        Engine["Python FastAPI Engine<br/>apps/engine :8000"]
-        DB[("TimescaleDB :5432")]
-    end
-
-    subgraph external [외부 API]
-        KIS["KIS Open API<br/>모의·실전"]
-        Data["yfinance /<br/>FinanceDataReader"]
-    end
-
-    Browser -->|HTTP| Web
-    Web -->|REST /api/*| API
-    API -->|REST 프록시| Engine
-    API -.read-heavy.-> DB
-    Engine --> DB
-    Engine --> KIS
-    Engine --> Data
-```
-
-</details>
-
 ## 3. 주요 흐름
 
 ### 3.1 시세 수집 (배치)
@@ -114,40 +84,6 @@ flowchart LR
 유니버스 범위·옵션은 [엔진 README §5](./apps/engine/README.md#5-시세-수집-universe-ingestion).
 
 ![Ingest Flow](./docs/images/flow-ingest.excalidraw.png)
-
-<details>
-<summary>mermaid 원본</summary>
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant U as 사용자 / cron
-    participant Sh as ingest-universe.sh
-    participant E as engine: ingest_bulk
-    participant Src as yfinance / FDR
-    participant DB as TimescaleDB
-
-    U->>Sh: ./scripts/ingest-universe.sh [--universe ...]
-    Sh->>E: docker exec python -m src.scripts.ingest_bulk
-    E->>E: get_universe(name) (Wikipedia/iShares/FDR 파싱)
-    E->>DB: SELECT MAX(time) GROUP BY symbol<br/>(증분 baseline)
-
-    loop 배치 100종목씩
-        alt symbol .KS / .KQ
-            E->>Src: FinanceDataReader.DataReader(...)
-        else 그 외
-            E->>Src: yf.download(multi-ticker)
-        end
-        E->>DB: market_data UPSERT
-    end
-
-    E->>E: factor precompute (RSI/SMA/vol_ratio 등)
-    E->>DB: factors UPSERT
-    E-->>Sh: 결과 요약 (성공·실패 카운트)
-    Sh-->>U: 로그 scripts/logs/ingest-*.log
-```
-
-</details>
 
 ### 3.2 백테스트·전략 자동 탐색
 
@@ -162,48 +98,6 @@ sequenceDiagram
 
 ![Backtest & Discover Flow](./docs/images/flow-backtest-discover.excalidraw.png)
 
-<details>
-<summary>mermaid 원본</summary>
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant Web as Next.js (전략 페이지)
-    participant Go as Go API
-    participant E as Python Engine
-    participant DB as TimescaleDB
-
-    rect rgb(240, 248, 255)
-        Note over Web, DB: ① 시뮬레이션 — 동기
-        Web->>Go: POST /api/portfolio/backtest
-        Go->>E: POST /portfolio/backtest
-        E->>DB: factors + market_data 조회
-        E->>E: vectorized backtest<br/>(누적수익률·MDD·CAGR·승률)
-        E-->>Go: 결과 JSON
-        Go-->>Web: 그대로 전달
-    end
-
-    rect rgb(255, 248, 240)
-        Note over Web, DB: ② 자동 탐색 — 비동기 grid search
-        Web->>Go: POST /api/portfolio/discover/start
-        Go->>E: POST /portfolio/discover/start
-        E->>E: background job 등록<br/>(룰 조합 N개 생성)
-        E-->>Web: { job_id }
-
-        loop 1초 polling
-            Web->>Go: GET /api/portfolio/discover/status/{job_id}
-            Go->>E: GET /portfolio/discover/status/{job_id}
-            E->>DB: factors 조회 + 룰 평가
-            E-->>Web: { status, done/total, current }
-        end
-
-        E-->>Web: { status: done, result: top N 룰 }
-        Web->>Web: "이 룰 적용" → 룰 빌더에 반영
-    end
-```
-
-</details>
-
 > Job 결과는 메모리에 30분간 보존됩니다. 그 안에 다른 페이지로 이동했다
 > 돌아오면 같은 `job_id` 로 다시 조회 가능합니다.
 
@@ -214,42 +108,6 @@ sequenceDiagram
 한 라운드를 돌고 종료하며, 상태는 `live_trades` 테이블로 영속화됩니다.
 
 ![Live Trade Flow](./docs/images/flow-live.excalidraw.png)
-
-<details>
-<summary>mermaid 원본</summary>
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant Cron as cron / 사용자
-    participant Sh as run-live.sh
-    participant E as engine: run_once
-    participant DB as TimescaleDB
-    participant KIS as KIS Open API
-
-    Cron->>Sh: 평일 15:20 KST
-    Sh->>E: docker exec python -m src.scripts.run_live
-    E->>DB: 활성 전략 1개 로드
-    E->>KIS: 잔고·보유 조회
-    E->>DB: live_trades ↔ 보유 sync
-
-    Note over E, KIS: ① Exit 평가 → 매도
-    E->>E: stop_loss / take_profit /<br/>trailing_stop / time_exit 검사
-    E->>KIS: 매도 (rate limit 시 retry)
-    E->>DB: 청산 기록
-
-    Note over E, KIS: ② 진입 후보 스크리닝 + 갭 필터
-    E->>DB: 룰 매칭 종목 상위 N개
-    E->>KIS: 시가 조회 (갭 ±% 초과 스킵)
-
-    Note over E, KIS: ③ 매수
-    E->>KIS: 매수 (rate limit 시 retry)
-    E->>DB: 진입 기록 (peak=entry)
-
-    E-->>Sh: 결과 요약
-```
-
-</details>
 
 상세 동작 (KIS rate limit, 동시호가 시간대, 활성 전략 변경 영향, 실전 전환
 가이드 등) 은 [엔진 README §6](./apps/engine/README.md#6-라이브-자동매매) 참조.
