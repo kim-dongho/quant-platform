@@ -2,16 +2,18 @@
 한국투자증권(KIS) Open API 경량 클라이언트.
 
 - 토큰 자동 발급/캐싱 (24h TTL, 만료 5분 전 재발급)
+- **토큰 파일 영속화** — 컨테이너 재시작에도 살아남음 (/app/data/kis_token_{mode}.json)
+- **EGW00123 (만료 토큰) 자동 재시도** — 토큰 무효화 + 재발급 + 1회 재호출
 - 모의투자/실전 URL·tr_id 자동 분기 (KIS_MODE=paper|real)
-- 최소 기능으로 시작: 잔고 조회(get_balance). 주문/체결 등은 후속 단계에서 추가.
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 import threading
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, TypeVar
 
 import requests
 
@@ -22,6 +24,14 @@ class KisError(Exception):
 
 _PAPER_BASE_URL = "https://openapivts.koreainvestment.com:29443"
 _REAL_BASE_URL = "https://openapi.koreainvestment.com:9443"
+
+# 토큰 영속화 — 모드별 파일 분리. /app/data 는 docker-compose volume 매핑.
+_TOKEN_DIR = os.getenv("KIS_TOKEN_DIR", "/app/data")
+
+# rt_cd != "0" 응답 중 토큰 만료를 의미하는 코드. 발생 시 토큰 무효화 + 1회 재호출.
+_TOKEN_EXPIRED_CODE = "EGW00123"
+
+T = TypeVar("T")
 
 
 def _normalize_krx_code(symbol: str) -> str:
@@ -45,6 +55,65 @@ class KisClient:
         self._token: Optional[str] = None
         self._token_expires: Optional[datetime] = None
         self._lock = threading.Lock()
+
+        # 파일에 토큰 캐시가 있으면 로드 — 컨테이너 재시작에도 토큰 재사용.
+        self._load_token_from_file()
+
+    # ---------------------------------------------------------------------
+    # Token 파일 영속화
+    # ---------------------------------------------------------------------
+    @property
+    def _token_file(self) -> str:
+        return os.path.join(_TOKEN_DIR, f"kis_token_{self.mode}.json")
+
+    def _load_token_from_file(self) -> None:
+        try:
+            with open(self._token_file) as f:
+                data = json.load(f)
+            token = data.get("token")
+            expires_iso = data.get("expires")
+            if not token or not expires_iso:
+                return
+            expires = datetime.fromisoformat(expires_iso)
+            if datetime.now(timezone.utc) >= expires:
+                return  # 이미 만료
+            self._token = token
+            self._token_expires = expires
+            print(f"🔑 KIS token loaded from cache (expires {expires.isoformat()})")
+        except FileNotFoundError:
+            pass
+        except Exception as e:
+            print(f"⚠️  KIS token cache load failed: {e}")
+
+    def _save_token_to_file(self) -> None:
+        if not self._token or not self._token_expires:
+            return
+        try:
+            os.makedirs(_TOKEN_DIR, exist_ok=True)
+            with open(self._token_file, "w") as f:
+                json.dump(
+                    {
+                        "token": self._token,
+                        "expires": self._token_expires.isoformat(),
+                        "mode": self.mode,
+                    },
+                    f,
+                )
+            os.chmod(self._token_file, 0o600)  # 토큰은 비밀
+        except Exception as e:
+            print(f"⚠️  KIS token cache save failed: {e}")
+
+    def _clear_token(self) -> None:
+        """메모리 + 파일 캐시 모두 무효화."""
+        with self._lock:
+            self._token = None
+            self._token_expires = None
+        try:
+            os.remove(self._token_file)
+        except FileNotFoundError:
+            pass
+        except Exception as e:
+            print(f"⚠️  KIS token cache clear failed: {e}")
 
     # ---------------------------------------------------------------------
     # Auth
@@ -85,6 +154,7 @@ class KisClient:
         self._token = token
         self._token_expires = datetime.now(timezone.utc) + timedelta(seconds=expires_in - 300)
         print(f"🔑 KIS token issued (expires in {expires_in}s, mode={self.mode})")
+        self._save_token_to_file()
         return token
 
     def _get_token(self) -> str:
@@ -106,6 +176,17 @@ class KisClient:
             "appsecret": self.app_secret,
             "tr_id": tr_id,
         }
+
+    def _retry_on_token_expired(self, fn: Callable[[], T]) -> T:
+        """fn() 실행 → EGW00123 (만료 토큰) 만나면 캐시 무효화 + 1회 재시도."""
+        try:
+            return fn()
+        except KisError as e:
+            if _TOKEN_EXPIRED_CODE not in str(e):
+                raise
+            print(f"⚠️  {_TOKEN_EXPIRED_CODE} — 토큰 캐시 무효화 후 재시도")
+            self._clear_token()
+            return fn()
 
     # ---------------------------------------------------------------------
     # 계좌/잔고
@@ -131,48 +212,51 @@ class KisClient:
             "CTX_AREA_NK100": "",
         }
 
-        resp = requests.get(
-            f"{self.base_url}/uapi/domestic-stock/v1/trading/inquire-balance",
-            headers=self._auth_headers(tr_id),
-            params=params,
-            timeout=15,
-        )
-        if resp.status_code != 200:
-            raise KisError(f"Balance HTTP {resp.status_code}: {resp.text}")
+        def _do() -> Dict[str, Any]:
+            resp = requests.get(
+                f"{self.base_url}/uapi/domestic-stock/v1/trading/inquire-balance",
+                headers=self._auth_headers(tr_id),
+                params=params,
+                timeout=15,
+            )
+            if resp.status_code != 200:
+                raise KisError(f"Balance HTTP {resp.status_code}: {resp.text}")
 
-        data = resp.json()
-        if data.get("rt_cd") != "0":
-            raise KisError(f"KIS {data.get('msg_cd')}: {data.get('msg1')}")
+            data = resp.json()
+            if data.get("rt_cd") != "0":
+                raise KisError(f"KIS {data.get('msg_cd')}: {data.get('msg1')}")
 
-        holdings = [
-            {
-                "symbol": row.get("pdno"),
-                "name": row.get("prdt_name"),
-                "qty": int(row.get("hldg_qty") or 0),
-                "avg_cost": float(row.get("pchs_avg_pric") or 0),
-                "current_price": float(row.get("prpr") or 0),
-                "eval_amount": float(row.get("evlu_amt") or 0),
-                "profit": float(row.get("evlu_pfls_amt") or 0),
-                "profit_rate": float(row.get("evlu_pfls_rt") or 0),
+            holdings = [
+                {
+                    "symbol": row.get("pdno"),
+                    "name": row.get("prdt_name"),
+                    "qty": int(row.get("hldg_qty") or 0),
+                    "avg_cost": float(row.get("pchs_avg_pric") or 0),
+                    "current_price": float(row.get("prpr") or 0),
+                    "eval_amount": float(row.get("evlu_amt") or 0),
+                    "profit": float(row.get("evlu_pfls_amt") or 0),
+                    "profit_rate": float(row.get("evlu_pfls_rt") or 0),
+                }
+                for row in (data.get("output1") or [])
+            ]
+
+            output2 = data.get("output2") or []
+            summary_row = output2[0] if output2 else {}
+            summary = {
+                "total_eval": float(summary_row.get("tot_evlu_amt") or 0),
+                "cash": float(summary_row.get("dnca_tot_amt") or 0),
+                "deposit_d2": float(summary_row.get("prvs_rcdl_excc_amt") or 0),
+                "total_profit": float(summary_row.get("evlu_pfls_smtl_amt") or 0),
             }
-            for row in (data.get("output1") or [])
-        ]
 
-        output2 = data.get("output2") or []
-        summary_row = output2[0] if output2 else {}
-        summary = {
-            "total_eval": float(summary_row.get("tot_evlu_amt") or 0),
-            "cash": float(summary_row.get("dnca_tot_amt") or 0),
-            "deposit_d2": float(summary_row.get("prvs_rcdl_excc_amt") or 0),
-            "total_profit": float(summary_row.get("evlu_pfls_smtl_amt") or 0),
-        }
+            return {
+                "mode": self.mode,
+                "account": f"{self.account_number}-{self.account_product}",
+                "holdings": holdings,
+                "summary": summary,
+            }
 
-        return {
-            "mode": self.mode,
-            "account": f"{self.account_number}-{self.account_product}",
-            "holdings": holdings,
-            "summary": summary,
-        }
+        return self._retry_on_token_expired(_do)
 
     # ---------------------------------------------------------------------
     # 시세
@@ -182,30 +266,33 @@ class KisClient:
         self._assert_configured()
         code = _normalize_krx_code(symbol)
 
-        resp = requests.get(
-            f"{self.base_url}/uapi/domestic-stock/v1/quotations/inquire-price",
-            headers=self._auth_headers("FHKST01010100"),
-            params={"FID_COND_MRKT_DIV_CODE": "J", "FID_INPUT_ISCD": code},
-            timeout=10,
-        )
-        if resp.status_code != 200:
-            raise KisError(f"Quote HTTP {resp.status_code}: {resp.text}")
-        data = resp.json()
-        if data.get("rt_cd") != "0":
-            raise KisError(f"KIS {data.get('msg_cd')}: {data.get('msg1')}")
+        def _do() -> Dict[str, Any]:
+            resp = requests.get(
+                f"{self.base_url}/uapi/domestic-stock/v1/quotations/inquire-price",
+                headers=self._auth_headers("FHKST01010100"),
+                params={"FID_COND_MRKT_DIV_CODE": "J", "FID_INPUT_ISCD": code},
+                timeout=10,
+            )
+            if resp.status_code != 200:
+                raise KisError(f"Quote HTTP {resp.status_code}: {resp.text}")
+            data = resp.json()
+            if data.get("rt_cd") != "0":
+                raise KisError(f"KIS {data.get('msg_cd')}: {data.get('msg1')}")
 
-        out = data.get("output") or {}
-        return {
-            "symbol": code,
-            "price": float(out.get("stck_prpr") or 0),
-            "open": float(out.get("stck_oprc") or 0),
-            "high": float(out.get("stck_hgpr") or 0),
-            "low": float(out.get("stck_lwpr") or 0),
-            "prev_close": float(out.get("stck_sdpr") or 0),
-            "change": float(out.get("prdy_vrss") or 0),
-            "change_rate": float(out.get("prdy_ctrt") or 0),
-            "volume": int(float(out.get("acml_vol") or 0)),
-        }
+            out = data.get("output") or {}
+            return {
+                "symbol": code,
+                "price": float(out.get("stck_prpr") or 0),
+                "open": float(out.get("stck_oprc") or 0),
+                "high": float(out.get("stck_hgpr") or 0),
+                "low": float(out.get("stck_lwpr") or 0),
+                "prev_close": float(out.get("stck_sdpr") or 0),
+                "change": float(out.get("prdy_vrss") or 0),
+                "change_rate": float(out.get("prdy_ctrt") or 0),
+                "volume": int(float(out.get("acml_vol") or 0)),
+            }
+
+        return self._retry_on_token_expired(_do)
 
     # ---------------------------------------------------------------------
     # 주문
@@ -249,30 +336,34 @@ class KisClient:
             "ORD_QTY": str(qty),
             "ORD_UNPR": "0" if order_type == "market" else str(int(price)),
         }
-        resp = requests.post(
-            f"{self.base_url}/uapi/domestic-stock/v1/trading/order-cash",
-            headers=self._auth_headers(tr_id),
-            json=body,
-            timeout=15,
-        )
-        if resp.status_code != 200:
-            raise KisError(f"Order HTTP {resp.status_code}: {resp.text}")
-        data = resp.json()
-        if data.get("rt_cd") != "0":
-            raise KisError(f"KIS {data.get('msg_cd')}: {data.get('msg1')}")
 
-        out = data.get("output") or {}
-        return {
-            "side": side,
-            "symbol": code,
-            "qty": qty,
-            "order_type": order_type,
-            "price": price,
-            "order_no": out.get("ODNO"),
-            "branch_no": out.get("KRX_FWDG_ORD_ORGNO"),
-            "order_time": out.get("ORD_TMD"),
-            "mode": self.mode,
-        }
+        def _do() -> Dict[str, Any]:
+            resp = requests.post(
+                f"{self.base_url}/uapi/domestic-stock/v1/trading/order-cash",
+                headers=self._auth_headers(tr_id),
+                json=body,
+                timeout=15,
+            )
+            if resp.status_code != 200:
+                raise KisError(f"Order HTTP {resp.status_code}: {resp.text}")
+            data = resp.json()
+            if data.get("rt_cd") != "0":
+                raise KisError(f"KIS {data.get('msg_cd')}: {data.get('msg1')}")
+
+            out = data.get("output") or {}
+            return {
+                "side": side,
+                "symbol": code,
+                "qty": qty,
+                "order_type": order_type,
+                "price": price,
+                "order_no": out.get("ODNO"),
+                "branch_no": out.get("KRX_FWDG_ORD_ORGNO"),
+                "order_time": out.get("ORD_TMD"),
+                "mode": self.mode,
+            }
+
+        return self._retry_on_token_expired(_do)
 
     # ---------------------------------------------------------------------
     # 주문/체결 내역
@@ -307,48 +398,52 @@ class KisClient:
             "CTX_AREA_FK100": "",
             "CTX_AREA_NK100": "",
         }
-        resp = requests.get(
-            f"{self.base_url}/uapi/domestic-stock/v1/trading/inquire-daily-ccld",
-            headers=self._auth_headers(tr_id),
-            params=params,
-            timeout=15,
-        )
-        if resp.status_code != 200:
-            raise KisError(f"Orders HTTP {resp.status_code}: {resp.text}")
-        data = resp.json()
-        if data.get("rt_cd") != "0":
-            raise KisError(f"KIS {data.get('msg_cd')}: {data.get('msg1')}")
 
-        rows = data.get("output1") or []
-        results: List[Dict[str, Any]] = []
-        for r in rows:
-            ord_qty = int(r.get("ord_qty") or 0)
-            ccld_qty = int(r.get("tot_ccld_qty") or 0)
-            # status: 체결수량 >= 주문수량이면 filled, 0이면 pending, 나머진 partial
-            if ccld_qty == 0:
-                status = "pending"
-            elif ccld_qty >= ord_qty:
-                status = "filled"
-            else:
-                status = "partial"
-            side_code = r.get("sll_buy_dvsn_cd")  # 01=매도, 02=매수
-            results.append(
-                {
-                    "order_no": r.get("odno"),
-                    "date": r.get("ord_dt"),
-                    "time": r.get("ord_tmd"),
-                    "symbol": r.get("pdno"),
-                    "name": r.get("prdt_name"),
-                    "side": "sell" if side_code == "01" else "buy",
-                    "qty": ord_qty,
-                    "price": float(r.get("ord_unpr") or 0),
-                    "filled_qty": ccld_qty,
-                    "filled_avg_price": float(r.get("avg_prvs") or 0),
-                    "status": status,
-                    "order_type": "market" if r.get("ord_dvsn_cd") == "01" else "limit",
-                }
+        def _do() -> List[Dict[str, Any]]:
+            resp = requests.get(
+                f"{self.base_url}/uapi/domestic-stock/v1/trading/inquire-daily-ccld",
+                headers=self._auth_headers(tr_id),
+                params=params,
+                timeout=15,
             )
-        return results
+            if resp.status_code != 200:
+                raise KisError(f"Orders HTTP {resp.status_code}: {resp.text}")
+            data = resp.json()
+            if data.get("rt_cd") != "0":
+                raise KisError(f"KIS {data.get('msg_cd')}: {data.get('msg1')}")
+
+            rows = data.get("output1") or []
+            results: List[Dict[str, Any]] = []
+            for r in rows:
+                ord_qty = int(r.get("ord_qty") or 0)
+                ccld_qty = int(r.get("tot_ccld_qty") or 0)
+                # status: 체결수량 >= 주문수량이면 filled, 0이면 pending, 나머진 partial
+                if ccld_qty == 0:
+                    status = "pending"
+                elif ccld_qty >= ord_qty:
+                    status = "filled"
+                else:
+                    status = "partial"
+                side_code = r.get("sll_buy_dvsn_cd")  # 01=매도, 02=매수
+                results.append(
+                    {
+                        "order_no": r.get("odno"),
+                        "date": r.get("ord_dt"),
+                        "time": r.get("ord_tmd"),
+                        "symbol": r.get("pdno"),
+                        "name": r.get("prdt_name"),
+                        "side": "sell" if side_code == "01" else "buy",
+                        "qty": ord_qty,
+                        "price": float(r.get("ord_unpr") or 0),
+                        "filled_qty": ccld_qty,
+                        "filled_avg_price": float(r.get("avg_prvs") or 0),
+                        "status": status,
+                        "order_type": "market" if r.get("ord_dvsn_cd") == "01" else "limit",
+                    }
+                )
+            return results
+
+        return self._retry_on_token_expired(_do)
 
 
 # 싱글톤 (env는 프로세스 수명 동안 고정이라 안전)

@@ -57,6 +57,8 @@ services:
     # 패키지 의존성(requirements.txt) 추가 시에만 docker-compose build engine
     volumes:
       - ./apps/engine/src:/app/src
+      # KIS 토큰 파일 영속화 — 컨테이너 재시작 시에도 토큰 재사용 (.gitignore 됨).
+      - ./apps/engine/data:/app/data
     # 개발 편의 — Swagger UI(/docs) / OpenAPI 스펙(/openapi.json) 호스트 접근.
     # 프론트는 항상 Go API(:8080)를 거치므로 운영에는 불필요.
     ports:
