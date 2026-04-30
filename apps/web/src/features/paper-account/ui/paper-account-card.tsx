@@ -102,15 +102,23 @@ const SummaryBlock = ({
         </div>
       </div>
       <div className="border-outline-variant/30 grid grid-cols-2 gap-2 border-t pt-2">
-        <MiniStat label="예수금" value={fmtKRW(summary.cash)} />
-        <MiniStat label="D+2 정산" value={fmtKRW(summary.deposit_d2)} />
+        <MiniStat
+          label="매수가능"
+          value={fmtKRW(summary.deposit_d2)}
+          hint="D+2 정산 후 실제 매수에 쓸 수 있는 예수금"
+        />
+        <MiniStat
+          label="예수금 총액"
+          value={fmtKRW(summary.cash)}
+          hint="정산 전 매수·매도 포함 총액 (KIS dnca_tot_amt)"
+        />
       </div>
     </section>
   );
 };
 
-const MiniStat = ({ label, value }: { label: string; value: string }) => (
-  <div className="flex flex-col">
+const MiniStat = ({ label, value, hint }: { label: string; value: string; hint?: string }) => (
+  <div className="flex flex-col" title={hint}>
     <span className="text-on-surface-variant text-[10px] tracking-wider uppercase">{label}</span>
     <span className="text-on-surface font-mono text-[13px] tabular-nums">{value}</span>
   </div>

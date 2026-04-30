@@ -79,6 +79,11 @@ def _today_gap_pct(symbol: str, kis: KisClient) -> Optional[float]:
     return (open_price / yesterday_close - 1) * 100
 
 
+def _to_code(symbol: str) -> str:
+    """KIS 형식('000150') 과 DB 형식('000150.KS') 비교용 — 6자리 코드만 추출."""
+    return symbol.split(".")[0] if symbol else symbol
+
+
 def _label(symbol: str, name: Optional[str]) -> str:
     """로그·UI용 표시: '종목명 (티커)' 또는 이름 없으면 티커만."""
     if name and name != symbol:
@@ -177,8 +182,11 @@ def run_once(dry_run: bool = False) -> dict[str, Any]:
         return {"status": "kis_error", "error": str(e)}
 
     holdings: list[dict[str, Any]] = balance.get("holdings") or []
-    cash = float((balance.get("summary") or {}).get("cash") or 0)
-    print(f"💰 Holdings: {len(holdings)}개, cash: ₩{cash:,.0f}")
+    summary = balance.get("summary") or {}
+    # `cash` (dnca_tot_amt) 는 정산 전 총액이라 매수해도 안 줄어듦 — 실제 매수 가능 예수금은
+    # D+2 정산금 (prvs_rcdl_excc_amt). 자동 배분·잔고 부족 체크는 이걸 기준으로.
+    cash = float(summary.get("deposit_d2") or summary.get("cash") or 0)
+    print(f"💰 Holdings: {len(holdings)}개, 매수가능: ₩{cash:,.0f}")
 
     # ─── 0. live_trades 와 KIS 잔고 sync ─────────────────────
     # 외부 매수/매도 반영 + peak_price 갱신 + 진입일 정보 확보 (time_exit 평가용).
@@ -223,11 +231,15 @@ def run_once(dry_run: bool = False) -> dict[str, Any]:
                 record_exit(trade_id, exit_price=exit_px, reason=reason)
 
     # ─── 2. 진입 후보 (screen) ───────────────────────────────
-    held_syms = {h["symbol"] for h in holdings} - sold_syms
-    open_slots = strategy["max_positions"] - len(held_syms)
+    # KIS 잔고 symbol 은 6자리('000150'), 스크리닝 결과는 .KS/.KQ suffix 형식
+    # ('000150.KS') 라 .symbol 직접 비교하면 같은 종목을 다른 종목으로 인식해
+    # 이미 보유한 종목을 또 매수하는 버그 → 6자리 코드로 정규화 후 비교.
+    sold_codes = {_to_code(s) for s in sold_syms}
+    held_codes = {_to_code(h["symbol"]) for h in holdings} - sold_codes
+    open_slots = strategy["max_positions"] - len(held_codes)
 
     if open_slots <= 0:
-        print(f"📊 빈 슬롯 없음 (보유 {len(held_syms)}/{strategy['max_positions']}) — 매수 스킵")
+        print(f"📊 빈 슬롯 없음 (보유 {len(held_codes)}/{strategy['max_positions']}) — 매수 스킵")
         return {"status": "ok", "sells": sells, "buys": []}
 
     print(f"🔍 빈 슬롯 {open_slots}개 — screen 실행")
@@ -245,8 +257,12 @@ def run_once(dry_run: bool = False) -> dict[str, Any]:
         print(f"❌ screen failed: {e}")
         return {"status": "screen_error", "error": str(e), "sells": sells, "buys": []}
 
+    # 보유 + 방금 매도한 종목 모두 후보 제외 (sell→buy 한 라운드 왕복 방지).
+    excluded_codes = held_codes | sold_codes
     raw_candidates = [
-        c for c in (screen_result.get("candidates") or []) if c["symbol"] not in held_syms
+        c
+        for c in (screen_result.get("candidates") or [])
+        if _to_code(c["symbol"]) not in excluded_codes
     ]
     print(f"   → 후보 {len(raw_candidates)}개 (보유 제외, buffer={candidate_buffer})")
 
@@ -271,8 +287,16 @@ def run_once(dry_run: bool = False) -> dict[str, Any]:
             break
 
     # ─── 4. 매수 주문 ────────────────────────────────────────
+    # position_size_krw > 0 → 종목당 고정 배분.
+    # position_size_krw <= 0 → 자본 균등 분배 (현재 잔고 / 빈 슬롯).
+    #   1주도 못 사는 후보가 생기면 다음 후보가 같은 size 로 시도. 잔고 부족분만 스킵.
+    fixed_size = int(strategy.get("position_size_krw") or 0)
+    equal_weight = fixed_size <= 0
+    auto_size = int(cash // max(open_slots, 1)) if equal_weight else 0
+    if equal_weight:
+        print(f"💸 자본 균등 분배 — 잔고 ₩{cash:,.0f} ÷ 슬롯 {open_slots} = 종목당 ₩{auto_size:,}")
+
     buys: list[dict[str, Any]] = []
-    size_krw = int(strategy.get("position_size_krw") or 0)
     for i, (c, gap) in enumerate(selected):
         if i > 0 and not dry_run:
             time.sleep(KIS_QUOTE_SLEEP_SEC)
@@ -280,6 +304,7 @@ def run_once(dry_run: bool = False) -> dict[str, Any]:
         name = c.get("company_name") or symbol
         label = _label(symbol, name)
         price = float(c.get("price") or 0)
+        size_krw = auto_size if equal_weight else fixed_size
         if price <= 0 or size_krw <= 0:
             print(f"   ⚠️  {label}: 가격/사이즈 0 → 스킵")
             continue

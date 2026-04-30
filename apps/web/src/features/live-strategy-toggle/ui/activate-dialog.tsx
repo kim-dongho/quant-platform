@@ -20,10 +20,18 @@ interface Props {
 const DEFAULT_NAME = '기본 전략';
 const DEFAULT_POSITION_SIZE = 1_000_000;
 
+type SizeMode = 'fixed' | 'equal_weight';
+
 export const ActivateDialog = ({ config, exitPolicy, existing, onClose }: Props) => {
   const [name, setName] = useState(existing?.name || DEFAULT_NAME);
+  // 기존 전략의 position_size_krw <= 0 이면 자본 균등 분배 모드.
+  const [sizeMode, setSizeMode] = useState<SizeMode>(() =>
+    (existing?.position_size_krw ?? 1) > 0 ? 'fixed' : 'equal_weight',
+  );
   const [positionSize, setPositionSize] = useState<number>(
-    existing?.position_size_krw ?? DEFAULT_POSITION_SIZE,
+    existing?.position_size_krw && existing.position_size_krw > 0
+      ? existing.position_size_krw
+      : DEFAULT_POSITION_SIZE,
   );
   const [error, setError] = useState<string | null>(null);
   const upsert = useUpsertLiveStrategy();
@@ -43,7 +51,7 @@ export const ActivateDialog = ({ config, exitPolicy, existing, onClose }: Props)
   const handleSubmit = () => {
     setError(null);
     const trimmed = name.trim() || DEFAULT_NAME;
-    if (positionSize < 10_000) {
+    if (sizeMode === 'fixed' && positionSize < 10_000) {
       setError('종목당 배분 금액은 최소 10,000원 이상이어야 합니다');
       return;
     }
@@ -54,7 +62,8 @@ export const ActivateDialog = ({ config, exitPolicy, existing, onClose }: Props)
         clauses: config.clauses,
         max_positions: config.max_positions,
         exit_policy: exitPolicy,
-        position_size_krw: positionSize,
+        // 자본 균등 분배 모드는 0 으로 전송. executor 가 잔고 ÷ 슬롯 동적 계산.
+        position_size_krw: sizeMode === 'fixed' ? positionSize : 0,
       },
       {
         onSuccess: (data) => {
@@ -135,19 +144,55 @@ export const ActivateDialog = ({ config, exitPolicy, existing, onClose }: Props)
 
           <div>
             <label className="text-on-surface-variant mb-1.5 block text-xs font-medium">
-              종목당 배분 금액 (원)
+              자본 배분 방식
             </label>
-            <input
-              type="number"
-              min={10000}
-              step={100000}
-              value={positionSize}
-              onChange={(e) => setPositionSize(Number(e.target.value) || 0)}
-              className="border-outline-variant bg-surface text-on-surface focus:border-primary w-full rounded-lg border px-3 py-2 text-right font-mono text-sm tabular-nums outline-none"
-            />
-            <p className="text-on-surface-variant mt-1 text-[11px]">
-              최대 ₩{(positionSize * config.max_positions).toLocaleString()} 까지 사용됩니다
-            </p>
+            <div className="mb-2 flex gap-1">
+              <button
+                type="button"
+                onClick={() => setSizeMode('fixed')}
+                className={`flex-1 rounded-md border px-3 py-2 text-xs font-medium transition-colors ${
+                  sizeMode === 'fixed'
+                    ? 'border-primary bg-primary text-on-primary'
+                    : 'border-outline-variant/60 bg-surface text-on-surface-variant hover:bg-surface-container-low'
+                }`}
+              >
+                고정 금액
+              </button>
+              <button
+                type="button"
+                onClick={() => setSizeMode('equal_weight')}
+                className={`flex-1 rounded-md border px-3 py-2 text-xs font-medium transition-colors ${
+                  sizeMode === 'equal_weight'
+                    ? 'border-primary bg-primary text-on-primary'
+                    : 'border-outline-variant/60 bg-surface text-on-surface-variant hover:bg-surface-container-low'
+                }`}
+              >
+                자본 균등 분배
+              </button>
+            </div>
+
+            {sizeMode === 'fixed' ? (
+              <>
+                <input
+                  type="number"
+                  min={10000}
+                  step={100000}
+                  value={positionSize}
+                  onChange={(e) => setPositionSize(Number(e.target.value) || 0)}
+                  className="border-outline-variant bg-surface text-on-surface focus:border-primary w-full rounded-lg border px-3 py-2 text-right font-mono text-sm tabular-nums outline-none"
+                />
+                <p className="text-on-surface-variant mt-1 text-[11px]">
+                  종목당 ₩{positionSize.toLocaleString()} · 최대 ₩
+                  {(positionSize * config.max_positions).toLocaleString()} 까지 사용
+                </p>
+              </>
+            ) : (
+              <p className="border-outline-variant/40 bg-surface-container-low/60 text-on-surface-variant rounded-lg border px-3 py-2 text-[11.5px] leading-relaxed">
+                매 라운드 시작 시 <strong className="text-on-surface">잔고 ÷ 빈 슬롯</strong> 으로
+                종목당 배분이 동적 계산됩니다. 자본이 적을 때(예: 100만원) 도 빈 슬롯이 5개라면
+                종목당 약 20만원씩 배분돼 1주씩 매수 가능.
+              </p>
+            )}
           </div>
 
           {existing && (
