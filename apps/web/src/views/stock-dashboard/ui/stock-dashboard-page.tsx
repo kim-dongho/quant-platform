@@ -4,6 +4,7 @@ import { StockSearch } from '@/features/stock-search/ui/stock-search';
 
 import { StockChart } from '@/entities/stock/ui/stock-chart';
 
+import { PageHeader } from '@/shared/ui/page-header';
 import { StockLogo } from '@/shared/ui/stock-logo';
 
 import { useDashboardLogic } from '../lib/use-dashboard-logic';
@@ -22,21 +23,27 @@ export const StockDashboardPage = () => {
 
   return (
     <div className="bg-background flex h-full flex-1 flex-col overflow-hidden">
-      <header className="border-outline-variant/30 bg-surface-container-lowest flex items-center gap-3 border-b px-4 py-3">
-        <StockLogo symbol={symbol} size={36} />
-        <div className="flex items-baseline gap-2">
-          <span className="text-on-surface text-[18px] font-semibold">{companyName || symbol}</span>
-          {companyName && companyName !== symbol && (
-            <span className="text-on-surface-variant text-[13px]">{symbol}</span>
-          )}
-        </div>
-        <span className="border-outline-variant/40 text-on-surface-variant rounded-md border px-2 py-0.5 text-xs">
-          1D
-        </span>
-        <div className="ml-auto w-full max-w-xs">
-          <StockSearch onSearch={setSymbol} currentSymbol={symbol} />
-        </div>
-      </header>
+      <PageHeader
+        leading={<StockLogo symbol={symbol} size={36} />}
+        title={
+          <>
+            <span>{companyName || symbol}</span>
+            {companyName && companyName !== symbol && (
+              <span className="text-on-surface-variant text-[14px] font-normal">{symbol}</span>
+            )}
+          </>
+        }
+        subtitle={
+          <span className="border-outline-variant/40 inline-flex items-center rounded-md border px-2 py-0.5 text-xs">
+            1D
+          </span>
+        }
+        actions={
+          <div className="w-full max-w-xs">
+            <StockSearch onSearch={setSymbol} currentSymbol={symbol} />
+          </div>
+        }
+      />
 
       <div className="relative flex flex-1 flex-col overflow-hidden p-4">
         <div className="border-outline-variant/20 relative w-full flex-1 overflow-hidden rounded-xl border bg-white shadow-[0_4px_12px_rgba(0,0,0,0.03)]">
