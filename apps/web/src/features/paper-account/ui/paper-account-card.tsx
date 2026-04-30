@@ -24,9 +24,6 @@ export const PaperAccountCard = () => {
           <h2 className="text-on-surface-variant text-[13px] font-semibold tracking-wider uppercase">
             내 계좌
           </h2>
-          {data && (
-            <span className="text-on-surface-variant font-mono text-[10px]">{data.account}</span>
-          )}
         </div>
         {data && (
           <span

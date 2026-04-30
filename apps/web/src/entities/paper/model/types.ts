@@ -18,7 +18,6 @@ export interface PaperSummary {
 
 export interface PaperBalance {
   mode: 'paper' | 'real';
-  account: string;
   holdings: PaperHolding[];
   summary: PaperSummary;
 }

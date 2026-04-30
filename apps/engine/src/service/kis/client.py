@@ -251,7 +251,6 @@ class KisClient:
 
             return {
                 "mode": self.mode,
-                "account": f"{self.account_number}-{self.account_product}",
                 "holdings": holdings,
                 "summary": summary,
             }
