@@ -1,5 +1,7 @@
 import { useState } from 'react';
 
+import Image from 'next/image';
+
 interface Props {
   symbol: string;
   size?: number;
@@ -26,12 +28,14 @@ export const StockLogo = ({ symbol, size = 40 }: Props) => {
   const logoUrl = `https://static.toss.im/png-icons/securities/icn-sec-fill-${toLogoSymbol(symbol)}.png`;
 
   return (
-    <img
+    <Image
       src={logoUrl}
       alt={`${symbol} logo`}
+      width={size}
+      height={size}
       className="rounded-full bg-white object-contain shadow-md"
-      style={{ width: size, height: size }}
       onError={() => setError(true)}
+      unoptimized
     />
   );
 };

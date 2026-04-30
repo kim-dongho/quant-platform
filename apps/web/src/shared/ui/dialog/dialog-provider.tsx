@@ -103,7 +103,8 @@ const DialogRoot = ({ state, onConfirm, onCancel }: DialogRootProps) => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
-        isAlert ? onConfirm() : onCancel();
+        if (isAlert) onConfirm();
+        else onCancel();
       } else if (e.key === 'Enter') {
         e.preventDefault();
         onConfirm();

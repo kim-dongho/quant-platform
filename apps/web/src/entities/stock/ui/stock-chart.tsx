@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 
-import type { IChartApi, SeriesMarker, Time } from 'lightweight-charts';
+import type { CandlestickData, IChartApi, SeriesMarker, Time } from 'lightweight-charts';
 import { ColorType, LineStyle, createChart } from 'lightweight-charts';
 
 import { formatPrice, getCurrency } from '@/shared/lib/format-price';
@@ -119,7 +119,7 @@ export const StockChart = ({
       priceScaleId: 'right',
       priceFormat: currencyPriceFormat,
     });
-    candleSeries.setData(data as any);
+    candleSeries.setData(data as unknown as CandlestickData<Time>[]);
 
     // 마커 세팅 (데이터가 렌더링된 후 호출)
     if (markers.length > 0) {

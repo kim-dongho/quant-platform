@@ -3,7 +3,6 @@ import { apiClient } from '@/shared/api/client';
 import type {
   GetStockListResponseDto,
   SearchStocksResponseDto,
-  getBacktestResultResponseDto,
   getStockHistoryResponseDto,
 } from '../model/stocks-dto';
 
@@ -33,20 +32,5 @@ export const searchStocks = async (q: string, limit = 20): Promise<SearchStocksR
   const { data } = await apiClient.get<SearchStocksResponseDto>(`/stocks/search`, {
     params: { q: trimmed, limit },
   });
-  return data;
-};
-
-/**
- * 백테스트 결과 조회
- */
-export const getBacktestResult = async (
-  symbol: string,
-  params: any,
-): Promise<getBacktestResultResponseDto> => {
-  const { data } = await apiClient.post<getBacktestResultResponseDto>(`/backtest`, {
-    ticker: symbol,
-    params: params,
-  });
-
   return data;
 };

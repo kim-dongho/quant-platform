@@ -30,6 +30,8 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        {/* App Router 에선 layout.tsx 가 _document 역할. no-page-custom-font 룰의 false positive. */}
+        {/* eslint-disable-next-line @next/next/no-page-custom-font */}
         <link
           rel="stylesheet"
           href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"

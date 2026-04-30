@@ -1,7 +1,7 @@
 'use client';
 
 import type { KeyboardEvent } from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useStockSearchQuery } from '@/entities/stock/api/stocks-queries';
 
@@ -40,7 +40,8 @@ export const StockSearch = ({ currentSymbol, onSearch }: Props) => {
   }, []);
 
   const { data } = useStockSearchQuery(debounced, { enabled: isOpen });
-  const results = data ?? [];
+  // useMemo 로 감싸 stable reference — 아래 useEffect deps 가 매 render 마다 새 배열로 잡히지 않게.
+  const results = useMemo(() => data ?? [], [data]);
 
   // 결과가 바뀔 때 highlight 초기화
   useEffect(() => {

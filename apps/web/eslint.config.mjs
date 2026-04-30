@@ -15,7 +15,7 @@ const eslintConfig = [
     rules: {
       'prettier/prettier': 'error',
       '@typescript-eslint/no-unused-vars': 'error',
-      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-explicit-any': 'error',
       'react/display-name': 'off',
 
       // React 19 strict 규칙 — 합법적인 server-state hydration 패턴, Date.now 기반
