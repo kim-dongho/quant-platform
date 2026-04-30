@@ -13,10 +13,10 @@
     python -u -m src.scripts.ingest_bulk --batch-size 50    # 배치 크기 조정
     python -u -m src.scripts.ingest_bulk --tickers-file /tmp/my_list.txt
 """
+
 from __future__ import annotations
 
 import argparse
-import sys
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
@@ -152,7 +152,9 @@ def upsert_market_data(ticker: str, df: pd.DataFrame) -> int:
     if df.empty:
         return 0
 
-    rows = df[["time", "symbol", "open", "high", "low", "close", "volume"]].to_dict(orient="records")
+    rows = df[["time", "symbol", "open", "high", "low", "close", "volume"]].to_dict(
+        orient="records"
+    )
     if not rows:
         return 0
 
@@ -172,7 +174,9 @@ def upsert_market_data(ticker: str, df: pd.DataFrame) -> int:
 # ---------------------------------------------------------------------------
 # Bulk 다운로드 로직
 # ---------------------------------------------------------------------------
-def _extract_symbol_df(bulk_df: pd.DataFrame, ticker: str, is_multi: bool) -> Optional[pd.DataFrame]:
+def _extract_symbol_df(
+    bulk_df: pd.DataFrame, ticker: str, is_multi: bool
+) -> Optional[pd.DataFrame]:
     """yf.download 결과에서 특정 종목의 서브 DataFrame만 뽑아낸다."""
     try:
         if is_multi and isinstance(bulk_df.columns, pd.MultiIndex):
@@ -415,7 +419,7 @@ def main():
     print(f"\n🚀 Ingesting in {len(batches)} batches (size {args.batch_size})\n")
     for i, (market, batch) in enumerate(batches):
         batch_start = time.time()
-        print(f"[{i+1}/{len(batches)}] {market.upper()} · {len(batch)} symbols")
+        print(f"[{i + 1}/{len(batches)}] {market.upper()} · {len(batch)} symbols")
         try:
             if market == "kr":
                 s, f = process_krx_batch(batch, last_dates, today, first_start)
@@ -431,10 +435,14 @@ def main():
         remaining = len(batches) - i - 1
         if remaining > 0:
             eta = (elapsed / (i + 1)) * remaining
-            print(f"  ⏱ batch {time.time() - batch_start:.1f}s · total {elapsed:.0f}s · ETA {eta/60:.1f}min")
+            print(
+                f"  ⏱ batch {time.time() - batch_start:.1f}s · total {elapsed:.0f}s · ETA {eta / 60:.1f}min"
+            )
         time.sleep(args.sleep)
 
-    print(f"\n✅ Ingest done: {total_succeeded} ok, {total_failed} failed, {time.time() - start_ts:.0f}s")
+    print(
+        f"\n✅ Ingest done: {total_succeeded} ok, {total_failed} failed, {time.time() - start_ts:.0f}s"
+    )
 
     # 4. Factor precompute
     if args.skip_factors:
@@ -487,7 +495,7 @@ def main():
             pct = (i + 1) / total * 100
             eta = (elapsed / (i + 1)) * (total - i - 1) if i + 1 < total else 0
             print(
-                f"  [{i + 1}/{total}] {pct:.1f}% · last: {sym} · {elapsed:.0f}s · ETA {eta/60:.1f}min"
+                f"  [{i + 1}/{total}] {pct:.1f}% · last: {sym} · {elapsed:.0f}s · ETA {eta / 60:.1f}min"
             )
     print(
         f"✅ Factors done: {fac_ok} ok, {fac_fail} fail, {skipped} skipped, {time.time() - fac_start:.0f}s"

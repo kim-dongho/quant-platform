@@ -1,0 +1,11 @@
+# Ruff config for apps/engine
+#
+# E701 (multiple statements on one line) — `if x < v: return True` 같은 한 줄 if 문은
+#   _eval_clauses_or 같은 OR/AND 평가 분기에서 의도적으로 컴팩트하게 쓰고 있어 허용.
+# E402 (import not at top) — config.py 등에서 무거운 패키지(yfinance, FinanceDataReader)
+#   import 를 함수 안 lazy 로 두는 의도된 패턴이라 허용.
+
+line-length = 100
+
+[lint]
+ignore = ["E701", "E402"]

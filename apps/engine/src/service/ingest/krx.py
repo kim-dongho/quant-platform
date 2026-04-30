@@ -4,10 +4,10 @@
 DB 스키마는 미국과 공유 (stocks, market_data). symbol은 '005930.KS' / '066570.KQ' 형식으로
 저장해 미국 티커와 구분되고, yfinance와도 호환되는 포맷을 유지한다.
 """
+
 from __future__ import annotations
 
 import FinanceDataReader as fdr
-import pandas as pd
 from sqlalchemy import MetaData, Table, text
 from sqlalchemy.dialects.postgresql import insert
 

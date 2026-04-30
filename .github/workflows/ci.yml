@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [master, dev]
+  pull_request:
+    branches: [master]
+
+jobs:
+  # =========================================================================
+  # Web — Next.js + TypeScript
+  # =========================================================================
+  web:
+    name: Web (Next.js build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm --filter web exec eslint src
+
+      - name: Build
+        run: pnpm --filter web build
+
+  # =========================================================================
+  # Server — Go Fiber
+  # =========================================================================
+  server:
+    name: Server (Go build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/server
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache-dependency-path: apps/server/go.sum
+
+      - name: Build
+        run: go build ./...
+
+      - name: Test
+        run: go test ./...
+
+  # =========================================================================
+  # Engine — Python FastAPI (compile + ruff lint)
+  # =========================================================================
+  engine:
+    name: Engine (Python lint + compile)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: Lint
+        run: ruff check apps/engine/src
+
+      - name: Compile check (syntax)
+        run: python -m compileall -q apps/engine/src

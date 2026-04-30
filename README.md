@@ -4,8 +4,10 @@
 > 미국·국내 주식 10년치 데이터로 매매 룰을 백테스트하고, **Grid search 로 검증된 룰**을
 > 한국투자증권(KIS) 모의·실전 계좌에서 **cron 자동 매매**까지 한 흐름으로 운영합니다.
 
+![CI](https://github.com/kim-dongho/quant-platform/actions/workflows/ci.yml/badge.svg)
 ![Status](https://img.shields.io/badge/Status-In%20Development-green)
 ![Self-Host](https://img.shields.io/badge/Self--Host-docker--compose-informational)
+![License](https://img.shields.io/badge/License-MIT-blue)
 
 ![Hero](./docs/images/screenshots/hero.png)
 
