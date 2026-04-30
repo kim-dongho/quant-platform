@@ -22,6 +22,7 @@ from datetime import date
 
 from src.core.database import engine
 from src.service.kis import KisClient, KisError, get_kis_client
+from src.service.live.hysteresis import evaluate_signal_exit
 from src.service.live.strategy import get_active_strategy
 from src.service.live.trades import record_entry, record_exit, sync_with_holdings
 from src.service.backtest import ExitPolicy
@@ -106,6 +107,42 @@ def _place_order_with_retry(kis: KisClient, symbol: str, qty: int, side: str) ->
     return False
 
 
+def _load_latest_factors(symbols: list[str]) -> dict[str, dict[str, Any]]:
+    """보유 종목들의 가장 최근 factor 행을 일괄 조회.
+
+    KIS 잔고 symbol 은 6자리('000150'), DB 는 .KS/.KQ suffix 형식이라 두 가지 모두
+    시도. 종목 → factor 행 dict 형태로 반환 (signal_exit 평가용).
+    """
+    if not symbols:
+        return {}
+    # 6자리 코드 → DB suffix 형식 후보로 확장 (.KS/.KQ)
+    candidates: list[str] = []
+    for s in symbols:
+        candidates.append(s)
+        if "." not in s:
+            candidates.extend([f"{s}.KS", f"{s}.KQ"])
+
+    query = text(
+        """
+        SELECT DISTINCT ON (symbol)
+            symbol, rsi_14, sma_20, sma_50, sma_200, vol_ratio_20d, return_5d,
+            price_vs_sma20, price_vs_sma50, price_vs_sma200, sma20_vs_sma50
+        FROM factors
+        WHERE symbol = ANY(:syms)
+        ORDER BY symbol, time DESC
+        """
+    )
+    with engine.connect() as conn:
+        rows = conn.execute(query, {"syms": candidates}).mappings().all()
+
+    # 6자리 코드 키로 normalize 해서 반환
+    result: dict[str, dict[str, Any]] = {}
+    for r in rows:
+        code = r["symbol"].split(".")[0] if r["symbol"] else r["symbol"]
+        result[code] = dict(r)
+    return result
+
+
 def _evaluate_exits(
     holdings: list[dict[str, Any]],
     open_trades: dict[str, dict[str, Any]],
@@ -114,12 +151,20 @@ def _evaluate_exits(
     """청산할 (symbol, qty, name, reason, trade_id) 리스트.
 
     평가 우선순위:
-      stop_loss → take_profit → trailing_stop → time_exit
+      stop_loss → take_profit → trailing_stop → time_exit → signal_exit
     한 종목당 한 reason만. trade_id가 None이면 live_trades 기록이 없어
     time_exit/trailing_stop을 평가 못 한 케이스 (외부 매수분 첫 사이클).
+    signal_exit 는 진입 룰 깨짐 (hysteresis) — 백테스트와 일관된 동작.
     """
     to_exit: list[tuple[str, int, str, str, Optional[int]]] = []
     today = date.today()
+
+    # signal_exit 평가용 — 보유 종목 최신 factor 일괄 로드
+    signal_clauses = policy.signal_exit_clauses or []
+    factors_by_code: dict[str, dict[str, Any]] = {}
+    if signal_clauses:
+        codes = [str(h.get("symbol", "")).split(".")[0] for h in holdings if h.get("symbol")]
+        factors_by_code = _load_latest_factors(codes)
 
     for h in holdings:
         symbol = h.get("symbol")
@@ -153,6 +198,11 @@ def _evaluate_exits(
             and days_held >= policy.time_exit_days
         ):
             reason = "time_exit"
+        elif signal_clauses:
+            code = str(symbol).split(".")[0]
+            factor_row = factors_by_code.get(code)
+            if factor_row and evaluate_signal_exit(factor_row, signal_clauses):
+                reason = "signal_exit"
 
         if reason:
             name = h.get("name") or symbol

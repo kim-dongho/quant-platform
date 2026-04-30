@@ -4,6 +4,10 @@ MVP 제약
 - 활성 전략은 동시에 1개만 허용 (partial unique index 로 DB 레벨 강제).
 - POST 는 트랜잭션 내에서 기존 활성 전략을 자동 비활성화 후 새 전략을 활성 상태로 INSERT.
 - 이 단계에서는 주문 발사/스케줄링 없음. 단순 상태 저장소.
+
+Hysteresis 자동 도출
+- exit_policy.signal_exit_clauses 가 비어 있고 진입 룰(clauses) 이 있으면
+  upsert 시점에 자동으로 buffer 둔 청산 룰을 채워 백테스트 ↔ 라이브 동작을 일관되게 함.
 """
 
 from __future__ import annotations
@@ -14,6 +18,7 @@ from typing import Any
 from sqlalchemy import text
 
 from src.core.database import engine
+from src.service.live.hysteresis import derive_signal_exit_clauses
 
 
 def _row_to_dict(row) -> dict[str, Any]:
@@ -54,10 +59,15 @@ def upsert_active_strategy(payload: dict[str, Any]) -> dict[str, Any]:
 
     Returns: 새로 활성화된 전략 dict (기존 교체된 전략 정보는 `replaced` 키에 포함).
     """
-    clauses_json = json.dumps(payload["clauses"])
-    exit_policy_json = (
-        json.dumps(payload["exit_policy"]) if payload.get("exit_policy") is not None else None
-    )
+    clauses = payload["clauses"]
+    clauses_json = json.dumps(clauses)
+
+    # Hysteresis — exit_policy.signal_exit_clauses 가 비어 있으면 진입 룰에서 자동 도출.
+    # 사용자가 명시적으로 작성한 게 있으면 그대로 둠.
+    exit_policy = dict(payload.get("exit_policy") or {})
+    if not exit_policy.get("signal_exit_clauses") and clauses:
+        exit_policy["signal_exit_clauses"] = derive_signal_exit_clauses(clauses)
+    exit_policy_json = json.dumps(exit_policy) if exit_policy else None
 
     with engine.begin() as conn:
         replaced = conn.execute(
