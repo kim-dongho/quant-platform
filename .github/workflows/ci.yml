@@ -16,9 +16,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # version 명시 X — package.json 의 packageManager 필드를 자동 인식.
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - uses: actions/setup-node@v4
         with:
