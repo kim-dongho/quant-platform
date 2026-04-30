@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [master]
 
+# Node 20 → 24 전환 (2026-06 default 변경 대비)
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   # =========================================================================
   # Web — Next.js + TypeScript
