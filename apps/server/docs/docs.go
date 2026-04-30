@@ -68,6 +68,135 @@ const docTemplate = `{
                 }
             }
         },
+        "/live/strategies": {
+            "get": {
+                "description": "활성 1개 + 비활성 N개를 활성·최근수정 순으로 반환합니다.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "live"
+                ],
+                "summary": "저장된 라이브 전략 전체 목록",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "additionalProperties": true
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/live/strategies/{id}": {
+            "delete": {
+                "description": "활성 전략은 삭제 불가. 먼저 다른 전략으로 전환한 뒤 삭제하세요.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "live"
+                ],
+                "summary": "비활성 라이브 전략 삭제",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Strategy ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "활성 전략은 삭제 불가",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/live/strategies/{id}/activate": {
+            "post": {
+                "description": "지정 ID 전략을 활성화. 기존 활성 전략은 자동으로 비활성화됩니다.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "live"
+                ],
+                "summary": "저장된 라이브 전략 활성화",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Strategy ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/live/strategy": {
             "get": {
                 "description": "활성 전략이 없으면 null 을 반환합니다.",
@@ -164,6 +293,58 @@ const docTemplate = `{
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "description": "룰·청산 정책은 그대로 두고 position_size_krw 만 변경. 0 이하 → 자본 균등 분배 모드.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "live"
+                ],
+                "summary": "활성 전략의 종목당 배분 금액만 수정",
+                "parameters": [
+                    {
+                        "description": "{ position_size_krw: number }",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     },
                     "500": {

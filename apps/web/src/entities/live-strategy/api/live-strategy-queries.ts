@@ -1,16 +1,31 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { fetchActiveLiveStrategy, stopLiveStrategy, upsertLiveStrategy } from './live-strategy-api';
+import {
+  activateLiveStrategy,
+  deleteLiveStrategy,
+  fetchActiveLiveStrategy,
+  fetchLiveStrategies,
+  stopLiveStrategy,
+  updateLiveStrategySize,
+  upsertLiveStrategy,
+} from './live-strategy-api';
 
 export const liveStrategyKeys = {
   all: ['live-strategy'] as const,
   active: () => [...liveStrategyKeys.all, 'active'] as const,
+  list: () => [...liveStrategyKeys.all, 'list'] as const,
 };
 
 export const useActiveLiveStrategy = () =>
   useQuery({
     queryKey: liveStrategyKeys.active(),
     queryFn: fetchActiveLiveStrategy,
+  });
+
+export const useLiveStrategies = () =>
+  useQuery({
+    queryKey: liveStrategyKeys.list(),
+    queryFn: fetchLiveStrategies,
   });
 
 export const useUpsertLiveStrategy = () => {
@@ -25,6 +40,30 @@ export const useStopLiveStrategy = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: stopLiveStrategy,
+    onSuccess: () => qc.invalidateQueries({ queryKey: liveStrategyKeys.all }),
+  });
+};
+
+export const useActivateLiveStrategy = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: activateLiveStrategy,
+    onSuccess: () => qc.invalidateQueries({ queryKey: liveStrategyKeys.all }),
+  });
+};
+
+export const useDeleteLiveStrategy = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: deleteLiveStrategy,
+    onSuccess: () => qc.invalidateQueries({ queryKey: liveStrategyKeys.all }),
+  });
+};
+
+export const useUpdateLiveStrategySize = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: updateLiveStrategySize,
     onSuccess: () => qc.invalidateQueries({ queryKey: liveStrategyKeys.all }),
   });
 };

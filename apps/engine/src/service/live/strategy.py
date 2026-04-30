@@ -105,6 +105,112 @@ def upsert_active_strategy(payload: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+def list_strategies() -> list[dict[str, Any]]:
+    """저장된 모든 라이브 전략을 최근 활성화·수정 순으로 반환 (활성 1개 + 비활성 N개)."""
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                """
+                SELECT id, name, universe, clauses, max_positions, exit_policy,
+                       is_active, mode, position_size_krw, last_rebalance_at,
+                       created_at, updated_at
+                FROM live_strategies
+                ORDER BY is_active DESC, updated_at DESC
+                """
+            )
+        ).fetchall()
+    return [_row_to_dict(r) for r in rows]
+
+
+def activate_strategy(strategy_id: int) -> dict[str, Any]:
+    """지정한 전략을 활성화. 기존 활성 전략은 자동으로 비활성화.
+
+    Returns: 새로 활성화된 전략 dict (`replaced` 키에 교체된 전략 정보).
+    """
+    with engine.begin() as conn:
+        target = conn.execute(
+            text("SELECT id, name FROM live_strategies WHERE id = :id"),
+            {"id": strategy_id},
+        ).fetchone()
+        if target is None:
+            raise ValueError(f"strategy id={strategy_id} not found")
+
+        replaced = conn.execute(
+            text(
+                """
+                UPDATE live_strategies
+                SET is_active = false, updated_at = now()
+                WHERE is_active AND id != :id
+                RETURNING id, name
+                """
+            ),
+            {"id": strategy_id},
+        ).fetchone()
+
+        new_row = conn.execute(
+            text(
+                """
+                UPDATE live_strategies
+                SET is_active = true, updated_at = now()
+                WHERE id = :id
+                RETURNING id, name, universe, clauses, max_positions, exit_policy,
+                          is_active, mode, position_size_krw, last_rebalance_at,
+                          created_at, updated_at
+                """
+            ),
+            {"id": strategy_id},
+        ).fetchone()
+
+    result = _row_to_dict(new_row)
+    result["replaced"] = (
+        {"id": replaced.id, "name": replaced.name} if replaced else None
+    )
+    return result
+
+
+def delete_strategy(strategy_id: int) -> dict[str, Any]:
+    """비활성 전략을 삭제. 활성 전략은 삭제 거부 (먼저 다른 전략 활성화하거나 stop 후)."""
+    with engine.begin() as conn:
+        target = conn.execute(
+            text("SELECT id, name, is_active FROM live_strategies WHERE id = :id"),
+            {"id": strategy_id},
+        ).fetchone()
+        if target is None:
+            raise ValueError(f"strategy id={strategy_id} not found")
+        if target.is_active:
+            raise ValueError("cannot delete active strategy — stop or switch first")
+
+        conn.execute(
+            text("DELETE FROM live_strategies WHERE id = :id"),
+            {"id": strategy_id},
+        )
+    return {"deleted": True, "id": target.id, "name": target.name}
+
+
+def update_active_size(position_size_krw: int) -> dict[str, Any]:
+    """활성 전략의 종목당 배분 금액만 수정. 새 row 안 만들고 같은 row UPDATE.
+
+    position_size_krw <= 0 → 자본 균등 분배 모드 (executor 가 잔고 ÷ 슬롯 동적 계산).
+    """
+    with engine.begin() as conn:
+        row = conn.execute(
+            text(
+                """
+                UPDATE live_strategies
+                SET position_size_krw = :size, updated_at = now()
+                WHERE is_active
+                RETURNING id, name, universe, clauses, max_positions, exit_policy,
+                          is_active, mode, position_size_krw, last_rebalance_at,
+                          created_at, updated_at
+                """
+            ),
+            {"size": int(position_size_krw)},
+        ).fetchone()
+    if row is None:
+        raise ValueError("활성 전략이 없습니다")
+    return _row_to_dict(row)
+
+
 def stop_active_strategy() -> dict[str, Any]:
     """현재 활성 전략을 비활성화. 활성 전략이 없으면 stopped=false 반환."""
     with engine.begin() as conn:

@@ -1,15 +1,27 @@
-"""라이브 전략 (활성 1개) CRUD 라우터."""
+"""라이브 전략 (활성 1개 + 라이브러리) CRUD 라우터."""
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
 
 from src.api.deps import exit_policy_to_dict
 from src.api.schemas import LiveStrategyRequest
+from pydantic import BaseModel
+
 from src.service.live import (
+    activate_strategy,
+    delete_strategy,
     get_active_strategy,
+    list_strategies,
     stop_active_strategy,
+    update_active_size,
     upsert_active_strategy,
 )
+
+
+class UpdateSizeRequest(BaseModel):
+    """활성 전략의 종목당 배분 금액만 patch 할 때 사용. 0 이하 → 자본 균등 분배."""
+
+    position_size_krw: int
 
 router = APIRouter(prefix="/live", tags=["live"])
 
@@ -43,6 +55,18 @@ def upsert_live_strategy(req: LiveStrategyRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.patch("/strategy")
+def patch_live_strategy(req: UpdateSizeRequest):
+    """활성 전략의 종목당 배분 금액만 수정 (룰·청산 정책은 그대로)."""
+    try:
+        return update_active_size(req.position_size_krw)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        print(f"❌ patch_live_strategy failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.delete("/strategy")
 def delete_live_strategy():
     """현재 활성 전략을 중지."""
@@ -50,4 +74,38 @@ def delete_live_strategy():
         return stop_active_strategy()
     except Exception as e:
         print(f"❌ stop_live_strategy failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/strategies")
+def list_live_strategies():
+    """저장된 전체 라이브 전략 목록 (활성 1개 + 비활성 N개) 을 반환."""
+    try:
+        return list_strategies()
+    except Exception as e:
+        print(f"❌ list_live_strategies failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/strategies/{strategy_id}/activate")
+def activate_live_strategy(strategy_id: int):
+    """저장된 전략을 활성화. 기존 활성 전략은 자동 비활성화."""
+    try:
+        return activate_strategy(strategy_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        print(f"❌ activate_live_strategy failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/strategies/{strategy_id}")
+def remove_live_strategy(strategy_id: int):
+    """비활성 전략을 영구 삭제. 활성 전략은 거부."""
+    try:
+        return delete_strategy(strategy_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"❌ delete_live_strategy failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))

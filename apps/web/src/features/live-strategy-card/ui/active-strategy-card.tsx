@@ -12,7 +12,14 @@ import type { ExitPolicy } from '@/entities/portfolio/model/types';
 
 import { useConfirm } from '@/shared/ui/dialog/dialog-provider';
 
-export const ActiveStrategyCard = () => {
+interface ActiveStrategyCardProps {
+  /** 우상단 액션에 "라이브러리" 버튼이 추가됨. 위젯 쪽에서 모달 토글. */
+  onOpenLibrary?: () => void;
+  /** 활성 전략의 종목당 배분만 빠르게 수정. 위젯 쪽에서 모달 토글. */
+  onOpenSize?: () => void;
+}
+
+export const ActiveStrategyCard = ({ onOpenLibrary, onOpenSize }: ActiveStrategyCardProps = {}) => {
   const { data: strategy, isLoading } = useActiveLiveStrategy();
   const stop = useStopLiveStrategy();
   const confirm = useConfirm();
@@ -22,7 +29,7 @@ export const ActiveStrategyCard = () => {
   }
 
   if (!strategy) {
-    return <EmptyCard />;
+    return <EmptyCard onOpenLibrary={onOpenLibrary} />;
   }
 
   const handleStop = async () => {
@@ -37,7 +44,15 @@ export const ActiveStrategyCard = () => {
     if (ok) stop.mutate();
   };
 
-  return <StrategyCard strategy={strategy} onStop={handleStop} stopping={stop.isPending} />;
+  return (
+    <StrategyCard
+      strategy={strategy}
+      onStop={handleStop}
+      stopping={stop.isPending}
+      onOpenLibrary={onOpenLibrary}
+      onOpenSize={onOpenSize}
+    />
+  );
 };
 
 // ---------------------------------------------------------------------------
@@ -51,24 +66,36 @@ const SkeletonCard = () => (
   </div>
 );
 
-const EmptyCard = () => (
+const EmptyCard = ({ onOpenLibrary }: { onOpenLibrary?: () => void }) => (
   <div className="border-outline-variant/40 bg-surface-container-lowest flex items-center justify-between gap-4 rounded-xl border px-4 py-3">
     <div className="flex items-center gap-3">
       <span className="material-symbols-outlined text-on-surface-variant text-[20px]">bolt</span>
       <div>
         <div className="text-on-surface text-sm font-semibold">활성 전략이 없습니다</div>
         <div className="text-on-surface-variant mt-0.5 text-xs">
-          전략 페이지에서 만든 룰을 라이브로 활성화해보세요
+          전략 페이지에서 만든 룰을 라이브로 활성화하거나, 저장된 전략을 불러오세요
         </div>
       </div>
     </div>
-    <Link
-      href="/portfolio"
-      className="border-outline-variant/60 bg-surface text-on-surface hover:bg-surface-container-low flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors"
-    >
-      전략 페이지로
-      <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
-    </Link>
+    <div className="flex items-center gap-1.5">
+      {onOpenLibrary && (
+        <button
+          type="button"
+          onClick={onOpenLibrary}
+          className="border-outline-variant/60 bg-surface text-on-surface hover:bg-surface-container-low flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors"
+        >
+          <span className="material-symbols-outlined text-[14px]">bookmarks</span>
+          저장된 전략
+        </button>
+      )}
+      <Link
+        href="/portfolio"
+        className="border-outline-variant/60 bg-surface text-on-surface hover:bg-surface-container-low flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors"
+      >
+        전략 페이지로
+        <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+      </Link>
+    </div>
   </div>
 );
 
@@ -76,9 +103,17 @@ interface StrategyCardProps {
   strategy: LiveStrategy;
   onStop: () => void;
   stopping: boolean;
+  onOpenLibrary?: () => void;
+  onOpenSize?: () => void;
 }
 
-const StrategyCard = ({ strategy, onStop, stopping }: StrategyCardProps) => {
+const StrategyCard = ({
+  strategy,
+  onStop,
+  stopping,
+  onOpenLibrary,
+  onOpenSize,
+}: StrategyCardProps) => {
   const universeLabel =
     UNIVERSE_OPTIONS.find((o) => o.value === strategy.universe)?.label ?? strategy.universe;
   const clauseText =
@@ -105,9 +140,31 @@ const StrategyCard = ({ strategy, onStop, stopping }: StrategyCardProps) => {
           </div>
         </div>
         <div className="flex items-center gap-1.5">
+          {onOpenLibrary && (
+            <button
+              type="button"
+              onClick={onOpenLibrary}
+              className="border-outline-variant/60 bg-surface text-on-surface hover:bg-surface-container-low inline-flex h-7 items-center gap-1 rounded-md border px-2.5 text-xs font-medium transition-colors"
+              title="저장된 전략 보기"
+            >
+              <span className="material-symbols-outlined text-[14px]">bookmarks</span>
+              라이브러리
+            </button>
+          )}
+          {onOpenSize && (
+            <button
+              type="button"
+              onClick={onOpenSize}
+              className="border-outline-variant/60 bg-surface text-on-surface hover:bg-surface-container-low inline-flex h-7 items-center gap-1 rounded-md border px-2.5 text-xs font-medium transition-colors"
+              title="종목당 배분 금액만 수정"
+            >
+              <span className="material-symbols-outlined text-[14px]">payments</span>
+              배분
+            </button>
+          )}
           <Link
             href="/portfolio"
-            className="border-outline-variant/60 bg-surface text-on-surface hover:bg-surface-container-low rounded-md border px-2.5 py-1 text-xs font-medium transition-colors"
+            className="border-outline-variant/60 bg-surface text-on-surface hover:bg-surface-container-low inline-flex h-7 items-center rounded-md border px-2.5 text-xs font-medium transition-colors"
           >
             수정
           </Link>
@@ -115,7 +172,7 @@ const StrategyCard = ({ strategy, onStop, stopping }: StrategyCardProps) => {
             type="button"
             onClick={onStop}
             disabled={stopping}
-            className="border-error/40 bg-error-container/60 text-error hover:bg-error-container flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-semibold transition-colors disabled:opacity-50"
+            className="border-error/40 bg-error-container/60 text-error hover:bg-error-container inline-flex h-7 items-center gap-1 rounded-md border px-2.5 text-xs font-semibold transition-colors disabled:opacity-50"
           >
             <span className="material-symbols-outlined text-[14px]">pause</span>
             {stopping ? '중지 중…' : '중지'}
@@ -127,7 +184,7 @@ const StrategyCard = ({ strategy, onStop, stopping }: StrategyCardProps) => {
         <Row label="진입 조건" value={clauseText} />
         <Row label="청산" value={exitText} />
         <Row label="최대 보유" value={`${strategy.max_positions}종목`} />
-        <Row label="종목당 배분" value={`₩${strategy.position_size_krw.toLocaleString()}`} />
+        <Row label="종목당 배분" value={formatPositionSize(strategy.position_size_krw)} />
         <Row label="마지막 리밸런싱" value={lastRebalance} />
       </div>
     </div>
@@ -140,6 +197,9 @@ const Row = ({ label, value }: { label: string; value: string }) => (
     <span className="text-on-surface flex-1 break-words">{value}</span>
   </div>
 );
+
+const formatPositionSize = (krw: number): string =>
+  krw > 0 ? `₩${krw.toLocaleString()}` : '자본 균등 분배 (잔고 ÷ 빈 슬롯)';
 
 const formatExit = (p: ExitPolicy | null): string => {
   if (!p) return '(없음)';

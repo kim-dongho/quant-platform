@@ -60,3 +60,16 @@ func Delete(c *fiber.Ctx, url string) error {
 	c.Set("Content-Type", "application/json")
 	return c.Status(status).Send(body)
 }
+
+// Patch — PATCH JSON body 그대로 전달.
+func Patch(c *fiber.Ctx, url string) error {
+	agent := fiber.Patch(url)
+	agent.Body(c.Body())
+	agent.Set("Content-Type", "application/json")
+	status, body, errs := agent.Bytes()
+	if len(errs) > 0 {
+		return c.Status(500).JSON(fiber.Map{"error": "Engine connection failed"})
+	}
+	c.Set("Content-Type", "application/json")
+	return c.Status(status).Send(body)
+}
