@@ -27,6 +27,7 @@
 5. [디렉토리 구조](#5-디렉토리-구조)
 6. [주요 기능](#6-주요-기능)
 7. [기술 스택](#7-기술-스택)
+8. [라이선스](#8-라이선스)
 
 ---
 
@@ -323,3 +324,11 @@ quant-platform/
 | **Data**     | TimescaleDB (PostgreSQL 14)                                             |
 | **Infra**    | Docker Compose                                                          |
 | **Monorepo** | pnpm workspace · Turborepo                                              |
+
+## 8. 라이선스
+
+[MIT](./LICENSE) © 2026 kim-dongho
+
+이 프로젝트는 자가호스팅 도구로, **자동 매매에 따른 모든 손익은 사용자 본인의
+책임**입니다. 실전(`KIS_MODE=real`) 전환 전에 모의계좌(`paper`) 에서 충분히
+검증하시기 바랍니다.
