@@ -177,9 +177,6 @@ cd apps/web && pnpm dev          # http://localhost:3000
 합니다. 별도 인프라 추가 없이 같은 `docker-compose.yml` 을 그대로 사용해
 배포할 수 있습니다.
 
-**호스팅 후보**: Hetzner CAX11 (싱가포르, ~6천원/월) · Oracle Free Tier (무료)
-· DigitalOcean / AWS Lightsail.
-
 ```bash
 # 0. VPS 에 Docker / git / pnpm 설치
 # 1. 레포 클론 + .env 작성 — 로컬과 동일 (KIS 키만 채우면 됨)
