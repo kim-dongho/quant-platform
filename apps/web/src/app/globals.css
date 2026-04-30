@@ -68,6 +68,11 @@
     monospace;
 }
 
+html {
+  /* OS 다크모드와 무관하게 라이트 토큰만 사용 — 다크모드 디자인 별도 안 잡음. */
+  color-scheme: light;
+}
+
 html,
 body {
   background: var(--color-background);
