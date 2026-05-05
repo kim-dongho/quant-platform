@@ -1,6 +1,12 @@
 import { apiClient } from '@/shared/api/client';
 
-import type { LiveStrategy, LiveStrategyInput, StopResponse, UpsertResponse } from '../model/types';
+import type {
+  LiveRealizedPnL,
+  LiveStrategy,
+  LiveStrategyInput,
+  StopResponse,
+  UpsertResponse,
+} from '../model/types';
 
 export const fetchActiveLiveStrategy = async (): Promise<LiveStrategy | null> => {
   const { data } = await apiClient.get<LiveStrategy | null>('/live/strategy');
@@ -36,5 +42,10 @@ export const activateLiveStrategy = async (id: number): Promise<UpsertResponse> 
 
 export const deleteLiveStrategy = async (id: number): Promise<{ deleted: boolean }> => {
   const { data } = await apiClient.delete<{ deleted: boolean }>(`/live/strategies/${id}`);
+  return data;
+};
+
+export const fetchLiveRealizedPnL = async (): Promise<LiveRealizedPnL> => {
+  const { data } = await apiClient.get<LiveRealizedPnL>('/live/realized-pnl');
   return data;
 };

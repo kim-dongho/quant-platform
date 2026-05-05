@@ -9,6 +9,7 @@ KIS 잔고 응답에는 진입일·고가 정보가 없으므로, 이 모듈이 
     오늘을 entry_date로, 평단가를 entry_price로 가정해 row 생성. time_exit 카운트는 그때부터.
   - live_trades엔 있는데 KIS 잔고엔 없는 종목 (외부에서 매도): 외부 청산으로 간주해 close.
 """
+
 from __future__ import annotations
 
 from datetime import date
@@ -25,33 +26,100 @@ from src.core.database import engine
 def get_open_trades(strategy_id: int) -> list[dict[str, Any]]:
     """전략의 open trades (exit_date IS NULL) 전체."""
     with engine.connect() as conn:
-        rows = conn.execute(
-            text(
-                """
+        rows = (
+            conn.execute(
+                text(
+                    """
                 SELECT id, symbol, name, qty, entry_date, entry_price, peak_price
                 FROM live_trades
                 WHERE strategy_id = :sid AND exit_date IS NULL
                 ORDER BY entry_date ASC, id ASC
                 """
-            ),
-            {"sid": strategy_id},
-        ).mappings().all()
+                ),
+                {"sid": strategy_id},
+            )
+            .mappings()
+            .all()
+        )
     return [dict(r) for r in rows]
+
+
+def get_realized_pnl_summary(strategy_id: int) -> dict[str, Any]:
+    """청산 완료된 trade 의 누적 실현손익 + 거래별 detail.
+
+    external_close (외부에서 매도된 종목) 는 entry_price 로 close 되어 PnL 0 이라
+    승/패 카운트와 누적 손익에서 제외하고 trades 리스트에는 포함시킨다.
+    """
+    with engine.connect() as conn:
+        rows = (
+            conn.execute(
+                text(
+                    """
+                SELECT id, symbol, name, qty, entry_date, entry_price,
+                       exit_date, exit_price, exit_reason
+                FROM live_trades
+                WHERE strategy_id = :sid AND exit_date IS NOT NULL
+                ORDER BY exit_date DESC, id DESC
+                """
+                ),
+                {"sid": strategy_id},
+            )
+            .mappings()
+            .all()
+        )
+
+    trades: list[dict[str, Any]] = []
+    total_cost = 0.0
+    total_pnl = 0.0
+    win = 0
+    loss = 0
+    for r in rows:
+        d = dict(r)
+        entry_px = float(d["entry_price"])
+        exit_px = float(d["exit_price"])
+        qty = int(d["qty"])
+        pnl = qty * (exit_px - entry_px)
+        pnl_pct = (exit_px / entry_px - 1.0) if entry_px > 0 else 0.0
+        d["pnl_krw"] = round(pnl)
+        d["pnl_pct"] = pnl_pct
+        if d.get("exit_reason") != "external_close":
+            total_cost += qty * entry_px
+            total_pnl += pnl
+            if pnl > 0:
+                win += 1
+            elif pnl < 0:
+                loss += 1
+        trades.append(d)
+
+    closed_count = win + loss
+    return {
+        "total_pnl_krw": round(total_pnl),
+        "total_pnl_pct": (total_pnl / total_cost) if total_cost > 0 else 0.0,
+        "closed_count": closed_count,
+        "win_count": win,
+        "loss_count": loss,
+        "win_rate": (win / closed_count) if closed_count > 0 else 0.0,
+        "trades": trades,
+    }
 
 
 def get_open_trade_by_symbol(strategy_id: int, symbol: str) -> Optional[dict[str, Any]]:
     with engine.connect() as conn:
-        row = conn.execute(
-            text(
-                """
+        row = (
+            conn.execute(
+                text(
+                    """
                 SELECT id, symbol, name, qty, entry_date, entry_price, peak_price
                 FROM live_trades
                 WHERE strategy_id = :sid AND symbol = :sym AND exit_date IS NULL
                 LIMIT 1
                 """
-            ),
-            {"sid": strategy_id, "sym": symbol},
-        ).mappings().first()
+                ),
+                {"sid": strategy_id, "sym": symbol},
+            )
+            .mappings()
+            .first()
+        )
     return dict(row) if row else None
 
 
@@ -179,7 +247,9 @@ def sync_with_holdings(
                 "entry_price": avg_cost,
                 "peak_price": avg_cost,
             }
-        print(f"   📝 {symbol} ({h.get('name') or symbol}): trade 신규 기록 (avg_cost ₩{avg_cost:,.0f})")
+        print(
+            f"   📝 {symbol} ({h.get('name') or symbol}): trade 신규 기록 (avg_cost ₩{avg_cost:,.0f})"
+        )
 
     # 2) trade에만 있는 종목 → 외부 청산으로 close
     for symbol, t in list(open_trades.items()):

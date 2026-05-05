@@ -1,5 +1,11 @@
 'use client';
 
+import { useState } from 'react';
+
+import { RealizedPnLDialog } from '@/features/live-realized-pnl/ui/realized-pnl-dialog';
+
+import { useLiveRealizedPnL } from '@/entities/live-strategy/api/live-strategy-queries';
+import type { LiveRealizedPnL } from '@/entities/live-strategy/model/types';
 import { usePaperBalanceQuery } from '@/entities/paper/api/paper-queries';
 import type { PaperHolding } from '@/entities/paper/model/types';
 
@@ -16,6 +22,8 @@ const fmtPct = (v: number) => {
 
 export const PaperAccountCard = () => {
   const { data, isLoading, error } = usePaperBalanceQuery();
+  const { data: pnl } = useLiveRealizedPnL();
+  const [pnlOpen, setPnlOpen] = useState(false);
 
   return (
     <div className="border-outline-variant/30 bg-surface-container-lowest flex h-full flex-col gap-4 rounded-xl border p-5">
@@ -54,10 +62,71 @@ export const PaperAccountCard = () => {
       {data && (
         <>
           <SummaryBlock summary={data.summary} holdings={data.holdings} />
+          {pnl && <RealizedPnLRow pnl={pnl} onOpen={() => setPnlOpen(true)} />}
           <HoldingsList holdings={data.holdings} />
         </>
       )}
+
+      {pnlOpen && pnl && <RealizedPnLDialog data={pnl} onClose={() => setPnlOpen(false)} />}
     </div>
+  );
+};
+
+const RealizedPnLRow = ({ pnl, onOpen }: { pnl: LiveRealizedPnL; onOpen: () => void }) => {
+  const hasTrades = pnl.closed_count > 0;
+  const positive = pnl.total_pnl_krw > 0;
+  const negative = pnl.total_pnl_krw < 0;
+
+  return (
+    <button
+      type="button"
+      onClick={() => hasTrades && onOpen()}
+      disabled={!hasTrades}
+      className={`bg-surface-container-low/60 border-outline-variant/30 flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-left transition-colors ${
+        hasTrades ? 'hover:bg-surface-container-low cursor-pointer' : 'cursor-default opacity-70'
+      }`}
+    >
+      <div className="flex flex-col">
+        <span className="text-on-surface-variant text-[10px] font-semibold tracking-wider uppercase">
+          누적 실현손익
+        </span>
+        {hasTrades ? (
+          <span className="text-on-surface-variant text-[10px]">
+            청산 {pnl.closed_count}건 · 승률 {(pnl.win_rate * 100).toFixed(0)}%
+          </span>
+        ) : (
+          <span className="text-on-surface-variant text-[10px]">
+            아직 청산 완료된 거래가 없어요
+          </span>
+        )}
+      </div>
+      <div className="flex items-center gap-2">
+        {hasTrades && (
+          <div className="flex flex-col items-end">
+            <span
+              className={`font-mono text-sm font-semibold tabular-nums ${
+                positive ? 'text-success' : negative ? 'text-error' : 'text-on-surface'
+              }`}
+            >
+              {pnl.total_pnl_krw >= 0 ? '+' : ''}
+              {fmtKRW(pnl.total_pnl_krw)}
+            </span>
+            <span
+              className={`font-mono text-[10px] tabular-nums ${
+                positive ? 'text-success' : negative ? 'text-error' : 'text-on-surface-variant'
+              }`}
+            >
+              {fmtPct(pnl.total_pnl_pct * 100)}
+            </span>
+          </div>
+        )}
+        {hasTrades && (
+          <span className="material-symbols-outlined text-on-surface-variant text-[16px]">
+            chevron_right
+          </span>
+        )}
+      </div>
+    </button>
   );
 };
 

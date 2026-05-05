@@ -12,4 +12,5 @@ func RegisterRoutes(api fiber.Router) {
 	g.Get("/strategies", ListLiveStrategies)
 	g.Post("/strategies/:id/activate", ActivateLiveStrategy)
 	g.Delete("/strategies/:id", DeleteLiveStrategy)
+	g.Get("/realized-pnl", GetLiveRealizedPnL)
 }

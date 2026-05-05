@@ -102,3 +102,15 @@ func DeleteLiveStrategy(c *fiber.Ctx) error {
 	id := c.Params("id")
 	return proxy.Delete(c, proxy.EngineBase+"/live/strategies/"+id)
 }
+
+// GetLiveRealizedPnL godoc
+// @Summary      활성 전략의 누적 실현손익 + 청산 거래 리스트
+// @Description  exit_date 가 채워진 trade 만 집계. external_close 는 거래 리스트에 포함되지만 승/패·누적 손익에서는 제외됩니다.
+// @Tags         live
+// @Produce      json
+// @Success      200  {object}  map[string]interface{}
+// @Failure      500  {object}  map[string]string
+// @Router       /live/realized-pnl [get]
+func GetLiveRealizedPnL(c *fiber.Ctx) error {
+	return proxy.Get(c, proxy.EngineBase+"/live/realized-pnl")
+}

@@ -1,4 +1,5 @@
 """라이브 전략 (활성 1개 + 라이브러리) CRUD 라우터."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
@@ -11,6 +12,7 @@ from src.service.live import (
     activate_strategy,
     delete_strategy,
     get_active_strategy,
+    get_realized_pnl_summary,
     list_strategies,
     stop_active_strategy,
     update_active_size,
@@ -22,6 +24,7 @@ class UpdateSizeRequest(BaseModel):
     """활성 전략의 종목당 배분 금액만 patch 할 때 사용. 0 이하 → 자본 균등 분배."""
 
     position_size_krw: int
+
 
 router = APIRouter(prefix="/live", tags=["live"])
 
@@ -96,6 +99,30 @@ def activate_live_strategy(strategy_id: int):
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         print(f"❌ activate_live_strategy failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/realized-pnl")
+def get_live_realized_pnl():
+    """현재 활성 전략의 청산 완료 거래 누적 실현손익 + 거래 리스트.
+
+    활성 전략이 없으면 0으로 채워진 빈 응답을 반환.
+    """
+    try:
+        active = get_active_strategy()
+        if not active:
+            return {
+                "total_pnl_krw": 0,
+                "total_pnl_pct": 0.0,
+                "closed_count": 0,
+                "win_count": 0,
+                "loss_count": 0,
+                "win_rate": 0.0,
+                "trades": [],
+            }
+        return get_realized_pnl_summary(active["id"])
+    except Exception as e:
+        print(f"❌ get_live_realized_pnl failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

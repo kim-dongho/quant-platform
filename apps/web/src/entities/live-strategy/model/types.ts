@@ -33,3 +33,27 @@ export interface StopResponse {
   id?: number;
   name?: string;
 }
+
+export interface LiveClosedTrade {
+  id: number;
+  symbol: string;
+  name: string | null;
+  qty: number;
+  entry_date: string;
+  entry_price: number;
+  exit_date: string;
+  exit_price: number;
+  exit_reason: string | null;
+  pnl_krw: number;
+  pnl_pct: number;
+}
+
+export interface LiveRealizedPnL {
+  total_pnl_krw: number;
+  total_pnl_pct: number;
+  closed_count: number;
+  win_count: number;
+  loss_count: number;
+  win_rate: number;
+  trades: LiveClosedTrade[];
+}

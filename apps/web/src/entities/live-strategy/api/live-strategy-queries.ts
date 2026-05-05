@@ -4,6 +4,7 @@ import {
   activateLiveStrategy,
   deleteLiveStrategy,
   fetchActiveLiveStrategy,
+  fetchLiveRealizedPnL,
   fetchLiveStrategies,
   stopLiveStrategy,
   updateLiveStrategySize,
@@ -14,6 +15,7 @@ export const liveStrategyKeys = {
   all: ['live-strategy'] as const,
   active: () => [...liveStrategyKeys.all, 'active'] as const,
   list: () => [...liveStrategyKeys.all, 'list'] as const,
+  realizedPnl: () => [...liveStrategyKeys.all, 'realized-pnl'] as const,
 };
 
 export const useActiveLiveStrategy = () =>
@@ -67,3 +69,9 @@ export const useUpdateLiveStrategySize = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: liveStrategyKeys.all }),
   });
 };
+
+export const useLiveRealizedPnL = () =>
+  useQuery({
+    queryKey: liveStrategyKeys.realizedPnl(),
+    queryFn: fetchLiveRealizedPnL,
+  });
