@@ -82,3 +82,18 @@ jobs:
 
       - name: Compile check (syntax)
         run: python -m compileall -q apps/engine/src
+
+  # =========================================================================
+  # Deploy — VPS self-hosted runner (dev branch push 만, CI 통과 시)
+  # =========================================================================
+  deploy:
+    name: Deploy to VPS
+    needs: [web, server, engine]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    runs-on: [self-hosted, vps]
+    concurrency:
+      group: deploy-vps
+      cancel-in-progress: false
+    steps:
+      - name: Pull and rebuild on VPS
+        run: /root/quant-platform/scripts/deploy.sh
