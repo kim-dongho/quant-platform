@@ -170,12 +170,25 @@ def discover_status(job_id: str):
 
 @router.post("/discover/cancel/{job_id}")
 def discover_cancel(job_id: str):
-    """진행 중인 grid search 취소 요청. discover loop 가 다음 iter 진입 시 멈춤."""
+    """진행 중인 grid search 취소. loop 가 다음 iter 진입 시 멈출 때까지 짧게 대기 후
+    최종 status (보통 cancelled) 와 부분 결과를 즉시 반환 — 클라이언트는 polling
+    1초 더 기다릴 필요 없이 바로 화면 갱신.
+    """
     with _DISCOVER_JOBS_LOCK:
         job = _DISCOVER_JOBS.get(job_id)
         if job is None:
             raise HTTPException(status_code=404, detail="Job not found or expired")
         if job.get("status") not in ("running", None):
-            return {"job_id": job_id, "status": job.get("status"), "cancelled": False}
+            return dict(job)
         job["cancel_requested"] = True
-    return {"job_id": job_id, "status": "cancelling", "cancelled": True}
+
+    # loop 가 status 를 cancelled/done 으로 바꿀 때까지 polling. 매 iter 가
+    # ~수백 ms 라 보통 1초 안에 끝남. 5초 timeout.
+    for _ in range(50):
+        time.sleep(0.1)
+        with _DISCOVER_JOBS_LOCK:
+            j = _DISCOVER_JOBS.get(job_id)
+            if j and j.get("status") in ("cancelled", "done", "error"):
+                return dict(j)
+    # timeout — 클라이언트는 polling 으로 마저 받음
+    return {"job_id": job_id, "status": "cancelling"}

@@ -46,6 +46,8 @@ export const getDiscoverStatus = async (jobId: string): Promise<DiscoverJobState
   return data;
 };
 
-export const cancelDiscover = async (jobId: string): Promise<void> => {
-  await apiClient.post(`/portfolio/discover/cancel/${jobId}`);
+export const cancelDiscover = async (jobId: string): Promise<DiscoverJobState> => {
+  // backend 가 loop 가 멈출 때까지 짧게 대기 후 최종 status + 부분 결과를 반환.
+  const { data } = await apiClient.post<DiscoverJobState>(`/portfolio/discover/cancel/${jobId}`);
+  return data;
 };

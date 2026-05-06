@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import type { DiscoverJobState, RuleConfig } from '../model/types';
 import {
@@ -30,10 +30,17 @@ export const useStartDiscover = () =>
     mutationFn: startDiscover,
   });
 
-export const useCancelDiscover = () =>
-  useMutation({
+export const useCancelDiscover = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
     mutationFn: cancelDiscover,
+    // cancel API 가 최종 status+결과 반환 → 즉시 query cache 에 박아 polling 1초
+    // 기다리지 않고 바로 화면 갱신.
+    onSuccess: (data, jobId) => {
+      queryClient.setQueryData(['discoverStatus', jobId], data);
+    },
   });
+};
 
 /** job_id가 있으면 1초마다 status polling. status === 'running'이 아니면 polling 중단. */
 export const useDiscoverJobStatus = (jobId: string | null) =>
