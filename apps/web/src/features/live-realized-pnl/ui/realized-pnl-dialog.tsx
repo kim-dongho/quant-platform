@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 
 import type { LiveRealizedPnL } from '@/entities/live-strategy/model/types';
 
+import { exitReasonStyle } from '@/shared/lib/exit-reason-label';
 import { formatPrice } from '@/shared/lib/format-price';
 import { StockLogo } from '@/shared/ui/stock-logo';
 
@@ -40,9 +41,9 @@ export const RealizedPnLDialog = ({ data, onClose }: Props) => {
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="bg-surface-container-lowest flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.25)]"
+        className="bg-surface-container-lowest flex w-full max-w-3xl flex-col gap-4 overflow-hidden rounded-2xl p-4 shadow-[0_20px_50px_rgba(0,0,0,0.25)]"
       >
-        <header className="border-outline-variant/30 flex items-center justify-between border-b px-5 py-3">
+        <header className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-primary text-[20px]">history</span>
             <h2 className="text-on-surface text-[15px] font-semibold">청산 거래 내역</h2>
@@ -57,7 +58,7 @@ export const RealizedPnLDialog = ({ data, onClose }: Props) => {
           </button>
         </header>
 
-        <section className="bg-surface-container-low/40 border-outline-variant/30 flex flex-wrap items-baseline gap-x-6 gap-y-1 border-b px-5 py-3">
+        <section className="bg-surface-container-low/40 flex flex-wrap items-baseline gap-x-6 gap-y-1 rounded-md px-4 py-3">
           <div>
             <span className="text-on-surface-variant text-[10px] tracking-wider uppercase">
               누적 손익
@@ -93,33 +94,32 @@ export const RealizedPnLDialog = ({ data, onClose }: Props) => {
           </div>
         </section>
 
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="h-[520px] overflow-y-auto">
           {data.trades.length === 0 ? (
-            <div className="text-on-surface-variant flex h-40 items-center justify-center text-xs">
+            <div className="text-on-surface-variant flex h-full items-center justify-center text-xs">
               아직 청산 완료된 거래가 없어요
             </div>
           ) : (
             <table className="w-full text-xs">
-              <thead className="bg-surface-container-low/60 text-on-surface-variant sticky top-0 text-[10px] tracking-wider uppercase">
+              <thead className="bg-surface-container-lowest text-on-surface-variant sticky top-0 text-[10px] tracking-wider uppercase">
                 <tr>
-                  <th className="px-4 py-2 text-left font-semibold">종목</th>
+                  <th className="px-3 py-2 text-left font-semibold">종목</th>
                   <th className="px-3 py-2 text-right font-semibold">수량</th>
                   <th className="px-3 py-2 text-right font-semibold">진입 → 청산</th>
                   <th className="px-3 py-2 text-right font-semibold">손익</th>
-                  <th className="px-3 py-2 text-right font-semibold">사유</th>
+                  <th className="px-3 py-2 text-center font-semibold">사유</th>
                 </tr>
               </thead>
               <tbody>
                 {data.trades.map((t) => {
                   const positive = t.pnl_krw > 0;
                   const negative = t.pnl_krw < 0;
-                  const isExternal = t.exit_reason === 'external_close';
                   return (
                     <tr
                       key={t.id}
                       className="border-outline-variant/20 hover:bg-surface-container-low/40 border-t"
                     >
-                      <td className="px-4 py-2">
+                      <td className="px-3 py-2">
                         <div className="flex items-center gap-2">
                           <StockLogo symbol={t.symbol} size={20} />
                           <div className="flex min-w-0 flex-col">
@@ -148,39 +148,35 @@ export const RealizedPnLDialog = ({ data, onClose }: Props) => {
                       <td className="px-3 py-2 text-right">
                         <div
                           className={`font-mono font-semibold tabular-nums ${
-                            isExternal
-                              ? 'text-on-surface-variant'
-                              : positive
-                                ? 'text-success'
-                                : negative
-                                  ? 'text-error'
-                                  : 'text-on-surface'
+                            positive ? 'text-success' : negative ? 'text-error' : 'text-on-surface'
                           }`}
                         >
-                          {isExternal ? '—' : `${t.pnl_krw >= 0 ? '+' : ''}${fmtKRW(t.pnl_krw)}`}
+                          {t.pnl_krw >= 0 ? '+' : ''}
+                          {fmtKRW(t.pnl_krw)}
                         </div>
-                        {!isExternal && (
-                          <div
-                            className={`font-mono text-[10px] tabular-nums ${
-                              positive
-                                ? 'text-success'
-                                : negative
-                                  ? 'text-error'
-                                  : 'text-on-surface-variant'
-                            }`}
-                          >
-                            {fmtPct(t.pnl_pct)}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <span
-                          className={`text-[10px] font-medium tracking-wide ${
-                            isExternal ? 'text-on-surface-variant' : 'text-on-surface'
+                        <div
+                          className={`font-mono text-[10px] tabular-nums ${
+                            positive
+                              ? 'text-success'
+                              : negative
+                                ? 'text-error'
+                                : 'text-on-surface-variant'
                           }`}
                         >
-                          {t.exit_reason ?? '—'}
-                        </span>
+                          {fmtPct(t.pnl_pct)}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        {(() => {
+                          const s = exitReasonStyle(t.exit_reason);
+                          return (
+                            <span
+                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide ${s.badge}`}
+                            >
+                              {s.label}
+                            </span>
+                          );
+                        })()}
                       </td>
                     </tr>
                   );

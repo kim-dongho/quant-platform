@@ -47,8 +47,8 @@ def get_open_trades(strategy_id: int) -> list[dict[str, Any]]:
 def get_realized_pnl_summary(strategy_id: int) -> dict[str, Any]:
     """청산 완료된 trade 의 누적 실현손익 + 거래별 detail.
 
-    external_close (외부에서 매도된 종목) 는 entry_price 로 close 되어 PnL 0 이라
-    승/패 카운트와 누적 손익에서 제외하고 trades 리스트에는 포함시킨다.
+    external_close (시스템이 모르는 사이 청산된 종목 — 외부 매도 또는 symbol 마이그레이션
+    잔재) 는 entry_price 로 close 되어 PnL 0 이라 응답에서 제외한다.
     """
     with engine.connect() as conn:
         rows = (
@@ -58,7 +58,9 @@ def get_realized_pnl_summary(strategy_id: int) -> dict[str, Any]:
                 SELECT id, symbol, name, qty, entry_date, entry_price,
                        exit_date, exit_price, exit_reason
                 FROM live_trades
-                WHERE strategy_id = :sid AND exit_date IS NOT NULL
+                WHERE strategy_id = :sid
+                  AND exit_date IS NOT NULL
+                  AND exit_reason <> 'external_close'
                 ORDER BY exit_date DESC, id DESC
                 """
                 ),
@@ -82,13 +84,12 @@ def get_realized_pnl_summary(strategy_id: int) -> dict[str, Any]:
         pnl_pct = (exit_px / entry_px - 1.0) if entry_px > 0 else 0.0
         d["pnl_krw"] = round(pnl)
         d["pnl_pct"] = pnl_pct
-        if d.get("exit_reason") != "external_close":
-            total_cost += qty * entry_px
-            total_pnl += pnl
-            if pnl > 0:
-                win += 1
-            elif pnl < 0:
-                loss += 1
+        total_cost += qty * entry_px
+        total_pnl += pnl
+        if pnl > 0:
+            win += 1
+        elif pnl < 0:
+            loss += 1
         trades.append(d)
 
     closed_count = win + loss
