@@ -73,6 +73,12 @@ export const DiscoverDialog = ({ open, onClose, defaults, exitPolicy, onApply }:
     cancelMutation.reset();
   };
 
+  // 닫으면 항상 처음 form 으로 — 다음 열 때 직전 결과·진행 화면 그대로 두지 않고 새로
+  const handleClose = () => {
+    reset();
+    onClose();
+  };
+
   const handleCancel = () => {
     if (!jobId) return;
     cancelMutation.mutate(jobId);
@@ -100,7 +106,7 @@ export const DiscoverDialog = ({ open, onClose, defaults, exitPolicy, onApply }:
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             className="text-on-surface-variant hover:bg-surface-container-low h-7 w-7 rounded-md"
             aria-label="닫기"
           >
@@ -153,7 +159,7 @@ export const DiscoverDialog = ({ open, onClose, defaults, exitPolicy, onApply }:
               result={result}
               onApply={(clauses) => {
                 onApply(clauses);
-                onClose();
+                handleClose();
               }}
               onReset={reset}
             />

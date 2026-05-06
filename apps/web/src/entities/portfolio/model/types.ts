@@ -139,6 +139,8 @@ export interface DiscoverResult {
   };
   evaluated: number;
   skipped: number;
+  /** 사용자 cancel 로 중간 종료된 결과인지 */
+  cancelled?: boolean;
   top: DiscoveredRow[];
   all: DiscoveredRow[];
 }

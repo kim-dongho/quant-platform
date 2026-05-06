@@ -13,6 +13,15 @@ export const DiscoverResults = ({
   onReset: () => void;
 }) => (
   <>
+    {result.cancelled && (
+      <div className="border-warning/40 bg-warning-container/30 text-on-warning-container flex items-center gap-2 rounded-md border px-3 py-2 text-[11px]">
+        <span className="material-symbols-outlined text-[14px]">info</span>
+        <span>
+          탐색이 취소되었습니다. 지금까지 평가된 <b>{result.evaluated}</b>개 결과만 표시됩니다.
+        </span>
+      </div>
+    )}
+
     <div className="border-outline-variant/30 bg-surface-container-low flex items-center justify-between rounded-md border px-3 py-2">
       <div className="text-on-surface-variant text-[11px]">
         평가 {result.evaluated} · 제외 {result.skipped} · 학습 기간{' '}
@@ -29,7 +38,9 @@ export const DiscoverResults = ({
 
     {result.top.length === 0 ? (
       <div className="border-outline-variant/40 text-on-surface-variant rounded-md border border-dashed py-10 text-center text-xs">
-        평가 가능한 룰이 없습니다 — 다른 투자 대상이나 조건 개수를 바꿔서 다시 시도해보세요.
+        {result.cancelled
+          ? '평가가 너무 일찍 취소돼 결과가 없습니다 — 다시 시도해보세요.'
+          : '평가 가능한 룰이 없습니다 — 다른 투자 대상이나 조건 개수를 바꿔서 다시 시도해보세요.'}
       </div>
     ) : (
       <>
