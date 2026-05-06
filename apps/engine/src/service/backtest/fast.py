@@ -16,6 +16,7 @@ portfolio_backtest와의 차이:
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
@@ -83,9 +84,18 @@ class DataCache:
               AND time < CAST(:end AS date) + INTERVAL '1 day'
             """
         )
-        with engine.connect() as conn:
-            factors_df = pd.read_sql(q_factors, conn, params=params)
-            close_df = pd.read_sql(q_close, conn, params=params)
+
+        # 두 SQL 을 병렬 실행 — universe×10년 fetch 가 직렬이면 시작 지연의 주범.
+        # SQLAlchemy engine 이 connection pool 을 가지니 thread 별 별도 connection.
+        def _fetch(query):
+            with engine.connect() as conn:
+                return pd.read_sql(query, conn, params=params)
+
+        with ThreadPoolExecutor(max_workers=2) as ex:
+            f_factors = ex.submit(_fetch, q_factors)
+            f_close = ex.submit(_fetch, q_close)
+            factors_df = f_factors.result()
+            close_df = f_close.result()
 
         if close_df.empty:
             raise ValueError("No close data in range")

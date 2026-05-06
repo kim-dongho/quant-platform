@@ -16,6 +16,7 @@
 """
 
 import math
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional
@@ -394,8 +395,12 @@ def run_portfolio_backtest(
             datetime.fromisoformat(end).date().replace(year=datetime.fromisoformat(end).year - 3)
         ).isoformat()
 
-    factors_df = _load_factors(symbols, start, end)
-    closes = _load_closes(symbols + [benchmark_symbol], start, end)
+    # 두 큰 SQL fetch 를 병렬로 — 직렬이면 backtest 시작 지연의 큰 부분.
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        f_factors = ex.submit(_load_factors, symbols, start, end)
+        f_closes = ex.submit(_load_closes, symbols + [benchmark_symbol], start, end)
+        factors_df = f_factors.result()
+        closes = f_closes.result()
 
     # 일부 종목의 최신 일자가 DB에 아직 반영 안 된 경우 (장중·미수집) equity 계산이
     # 왜곡되므로 종목별로 직전 거래일 가격을 forward-fill 한다.
