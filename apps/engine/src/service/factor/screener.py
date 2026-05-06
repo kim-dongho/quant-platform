@@ -106,8 +106,8 @@ def run_screen(
                 symbol, time, {", ".join(FACTOR_COLUMNS)}
             FROM factors
             WHERE symbol IN ({placeholders})
-              AND time <= :as_of
-              AND time >= (CAST(:as_of AS date) - INTERVAL '60 days')
+              AND time <= CAST(:as_of AS date) + INTERVAL '1 day'
+              AND time >= CAST(:as_of AS date) - INTERVAL '60 days'
             ORDER BY symbol, time DESC
         )
         SELECT
@@ -129,8 +129,8 @@ def run_screen(
         SELECT COUNT(DISTINCT symbol) AS cnt
         FROM factors
         WHERE symbol IN ({placeholders})
-          AND time <= :as_of
-          AND time >= (CAST(:as_of AS date) - INTERVAL '60 days')
+          AND time <= CAST(:as_of AS date) + INTERVAL '1 day'
+          AND time >= CAST(:as_of AS date) - INTERVAL '60 days'
         """
     )
 
@@ -187,8 +187,8 @@ def _rank_by_momentum(candidates: List[Dict[str, Any]], as_of_date: str) -> List
         SELECT symbol, time, close
         FROM market_data
         WHERE symbol IN ({placeholders})
-          AND time <= :as_of
-          AND time >= (CAST(:as_of AS date) - (:lookback || ' days')::interval)
+          AND time <= CAST(:as_of AS date) + INTERVAL '1 day'
+          AND time >= CAST(:as_of AS date) - (:lookback || ' days')::interval
         ORDER BY symbol, time
         """
     )
