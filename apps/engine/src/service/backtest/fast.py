@@ -13,6 +13,7 @@ portfolio_backtest와의 차이:
 
 상대적 순위 비교에 충분하며, top 후보를 portfolio_backtest로 다시 검증하는 흐름을 권장.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -60,26 +61,26 @@ class DataCache:
         _ensure_benchmark_data(bench_symbol)
 
         all_syms = symbols + [bench_symbol]
-        placeholders = ", ".join([f":s{i}" for i in range(len(all_syms))])
-        params: Dict[str, Any] = {f"s{i}": s for i, s in enumerate(all_syms)}
-        params["start"] = start
-        params["end"] = end
+        params: Dict[str, Any] = {"symbols": all_syms, "start": start, "end": end}
 
         cols_sql = ", ".join(FACTOR_COLUMNS)
+        # ANY(:symbols::text[]) 으로 plan cache 친화적, CAST 로 chunk pruning 명시 활성.
         q_factors = text(
             f"""
             SELECT time::date AS date, symbol, {cols_sql}
             FROM factors
-            WHERE symbol IN ({placeholders})
-              AND time >= :start AND time <= :end
+            WHERE symbol = ANY(:symbols)
+              AND time >= CAST(:start AS timestamptz)
+              AND time < CAST(:end AS date) + INTERVAL '1 day'
             """
         )
         q_close = text(
-            f"""
+            """
             SELECT time::date AS date, symbol, close
             FROM market_data
-            WHERE symbol IN ({placeholders})
-              AND time >= :start AND time <= :end
+            WHERE symbol = ANY(:symbols)
+              AND time >= CAST(:start AS timestamptz)
+              AND time < CAST(:end AS date) + INTERVAL '1 day'
             """
         )
         with engine.connect() as conn:
@@ -96,7 +97,9 @@ class DataCache:
         ).sort_index()
 
         bench_close = (
-            close_wide[bench_symbol] if bench_symbol in close_wide.columns else pd.Series(dtype=float)
+            close_wide[bench_symbol]
+            if bench_symbol in close_wide.columns
+            else pd.Series(dtype=float)
         )
         # 백테스트는 universe 종목만 — 벤치마크 컬럼은 별도 보관
         if bench_symbol in close_wide.columns:
@@ -119,10 +122,12 @@ class DataCache:
         s = pd.Timestamp(start)
         e = pd.Timestamp(end)
         close = self.close_wide.loc[s:e]
-        fac = self.factors_long[
-            (self.factors_long["date"] >= s) & (self.factors_long["date"] <= e)
-        ]
-        bench = self.benchmark_close.loc[s:e] if not self.benchmark_close.empty else self.benchmark_close
+        fac = self.factors_long[(self.factors_long["date"] >= s) & (self.factors_long["date"] <= e)]
+        bench = (
+            self.benchmark_close.loc[s:e]
+            if not self.benchmark_close.empty
+            else self.benchmark_close
+        )
         return DataCache(
             universe=self.universe,
             start=start,
@@ -167,9 +172,7 @@ def _safe_float(v) -> float:
     return f if np.isfinite(f) else 0.0
 
 
-def _benchmark_metrics(
-    equity: pd.Series, benchmark_close: pd.Series
-) -> Dict[str, float]:
+def _benchmark_metrics(equity: pd.Series, benchmark_close: pd.Series) -> Dict[str, float]:
     """벤치마크 대비 alpha / beta / 초과 CAGR 계산. 데이터 부족 시 0."""
     if benchmark_close is None or benchmark_close.empty or len(equity) < 2:
         return {"alpha": 0.0, "beta": 0.0, "excess_cagr": 0.0, "benchmark_cagr": 0.0}
@@ -282,9 +285,11 @@ def _compute_metrics(
         win_rate = wins / n
         avg_hold = sum(t["hold_days"] for t in trades) / n
 
-    bench = _benchmark_metrics(equity, benchmark_close) if benchmark_close is not None else {
-        "alpha": 0.0, "beta": 0.0, "excess_cagr": 0.0, "benchmark_cagr": 0.0
-    }
+    bench = (
+        _benchmark_metrics(equity, benchmark_close)
+        if benchmark_close is not None
+        else {"alpha": 0.0, "beta": 0.0, "excess_cagr": 0.0, "benchmark_cagr": 0.0}
+    )
 
     return {
         "cagr": _safe_float(cagr),
@@ -395,9 +400,7 @@ def fast_backtest(
         if slots > 0:
             cand_syms = passing_by_date.get(d, set()) - set(positions.keys())
             # 가격 있는 것만, 결정성 위해 정렬
-            valid = sorted(
-                s for s in cand_syms if s in prices.index and not pd.isna(prices[s])
-            )
+            valid = sorted(s for s in cand_syms if s in prices.index and not pd.isna(prices[s]))
             if valid:
                 # 균등 배분: 현재 총자산 / max_positions
                 pos_value_now = sum(

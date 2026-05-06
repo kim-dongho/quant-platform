@@ -20,9 +20,7 @@ from datetime import date, datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional
 
 import pandas as pd
-from sqlalchemy import text
 
-from src.core.database import engine
 from src.service.backtest.fast import DataCache, fast_backtest
 from src.service.factor import _resolve_universe
 
@@ -46,23 +44,21 @@ DEFAULT_EXIT_POLICY: Dict[str, Any] = {
 }
 
 
-def _factor_quantiles(symbols: List[str], factor: str, percentiles: List[float]) -> List[float]:
-    """factors 테이블에서 universe 종목들의 factor 값 quantile 후보 반환."""
-    if not symbols:
+def _factor_quantiles(
+    factors_long: pd.DataFrame, factor: str, percentiles: List[float]
+) -> List[float]:
+    """이미 캐시된 factors_long DataFrame 에서 quantile 후보 추출.
+
+    기존엔 factor 별 SQL 한 번씩 + 시간 범위 제한 없이 전체 history (수십만 row)
+    를 가져왔음 — discover 시작 직후 수 초 ~ 수십 초 지연의 주범. SnapshotCache
+    가 이미 train+test 기간 데이터를 들고 있으니 그걸로 계산.
+    """
+    if factor not in factors_long.columns:
         return []
-    placeholders = ", ".join([f":s{i}" for i in range(len(symbols))])
-    params = {f"s{i}": s for i, s in enumerate(symbols)}
-    query = text(
-        f"""
-        SELECT {factor} AS v FROM factors
-        WHERE symbol IN ({placeholders}) AND {factor} IS NOT NULL
-        """
-    )
-    with engine.connect() as conn:
-        df = pd.read_sql(query, conn, params=params)
-    if df.empty:
+    s = factors_long[factor].dropna()
+    if s.empty:
         return []
-    qs = df["v"].quantile(percentiles).tolist()
+    qs = s.quantile(percentiles).tolist()
     out: List[float] = []
     seen = set()
     for q in qs:
@@ -93,12 +89,12 @@ def _split_train_test(
 
 
 def _build_single_clauses(
-    symbols: List[str], factors: List[str], ops: List[str], percentiles: List[float]
+    factors_long: pd.DataFrame, factors: List[str], ops: List[str], percentiles: List[float]
 ) -> List[Dict[str, Any]]:
-    """factor × op × threshold 단일 절 후보 모두 생성."""
+    """factor × op × threshold 단일 절 후보 모두 생성 (캐시된 factors_long 기반)."""
     out: List[Dict[str, Any]] = []
     for f in factors:
-        thresholds = _factor_quantiles(symbols, f, percentiles)
+        thresholds = _factor_quantiles(factors_long, f, percentiles)
         if not thresholds:
             print(f"  ⚠️ No data for factor '{f}', skipping")
             continue
@@ -166,8 +162,8 @@ def discover(
     train_cache = full_cache.slice(train_start, train_end)
     test_cache = full_cache.slice(test_start, test_end)
 
-    # 1) 단일 절 후보
-    singles = _build_single_clauses(symbols, factors, ops, percentiles)
+    # 1) 단일 절 후보 — 캐시된 factors_long 으로 quantile 계산 (DB 추가 호출 없음)
+    singles = _build_single_clauses(full_cache.factors_long, factors, ops, percentiles)
 
     # 2) n_clauses에 따른 평가 대상 조합
     combos: List[List[Dict[str, Any]]]
