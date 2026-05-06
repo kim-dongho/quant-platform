@@ -97,8 +97,8 @@ def run_screen(
         params[f"s{i}"] = s
 
     select_cols = ", ".join([f"l.{c}" for c in FACTOR_COLUMNS])
-    # WHERE 통과한 종목을 모두 받아 ranking 후 max_positions 만 반환.
-    # 35종목 정도까지는 부담 없음 (KRX 350 universe + 룰 통과 케이스).
+    # latest CTE 한 번만 만들고 그 안에서 with_data (전체 데이터 확보 종목 수) +
+    # clause 통과 행을 같이 뽑아 DB roundtrip 1회로 끝낸다.
     query = text(
         f"""
         WITH latest AS (
@@ -109,13 +109,15 @@ def run_screen(
               AND time <= CAST(:as_of AS date) + INTERVAL '1 day'
               AND time >= CAST(:as_of AS date) - INTERVAL '60 days'
             ORDER BY symbol, time DESC
-        )
+        ),
+        cov AS (SELECT COUNT(*) AS cnt FROM latest)
         SELECT
             l.symbol,
             l.time,
             {select_cols},
             md.close AS price,
-            s.name AS company_name
+            s.name AS company_name,
+            (SELECT cnt FROM cov) AS coverage
         FROM latest l
         LEFT JOIN market_data md ON md.symbol = l.symbol AND md.time = l.time
         LEFT JOIN stocks s ON s.symbol = l.symbol
@@ -123,20 +125,29 @@ def run_screen(
         """
     )
 
-    # 커버리지 확인용 (with_data = 최근 60일 내 스냅샷이 있는 종목 수)
-    coverage_query = text(
-        f"""
-        SELECT COUNT(DISTINCT symbol) AS cnt
-        FROM factors
-        WHERE symbol IN ({placeholders})
-          AND time <= CAST(:as_of AS date) + INTERVAL '1 day'
-          AND time >= CAST(:as_of AS date) - INTERVAL '60 days'
-        """
-    )
-
     with engine.connect() as conn:
         result = conn.execute(query, params).mappings().all()
-        coverage = conn.execute(coverage_query, params).scalar() or 0
+    # coverage 는 모든 row 에 동일하게 들어있음 (latest CTE 행 수). row 가 없으면
+    # 별도 카운트 쿼리로 fallback.
+    if result:
+        coverage = int(result[0]["coverage"])
+    else:
+        with engine.connect() as conn:
+            coverage = (
+                conn.execute(
+                    text(
+                        f"""
+                        SELECT COUNT(DISTINCT symbol)
+                        FROM factors
+                        WHERE symbol IN ({placeholders})
+                          AND time <= CAST(:as_of AS date) + INTERVAL '1 day'
+                          AND time >= CAST(:as_of AS date) - INTERVAL '60 days'
+                        """
+                    ),
+                    params,
+                ).scalar()
+                or 0
+            )
 
     raw_candidates: List[Dict[str, Any]] = []
     for row in result:
@@ -178,17 +189,19 @@ def _rank_by_momentum(candidates: List[Dict[str, Any]], as_of_date: str) -> List
 
     symbols = [c["symbol"] for c in candidates]
     placeholders = ", ".join([f":s{i}" for i in range(len(symbols))])
-    params: Dict[str, Any] = {"as_of": as_of_date, "lookback": PRICE_HISTORY_DAYS}
+    params: Dict[str, Any] = {"as_of": as_of_date}
     for i, s in enumerate(symbols):
         params[f"s{i}"] = s
 
+    # interval 은 hardcoded 상수 → PostgreSQL plan time 에 chunk pruning 활성.
+    # (`:lookback || ' days'::interval` 처럼 동적이면 chunk exclusion 못 함)
     history_query = text(
         f"""
         SELECT symbol, time, close
         FROM market_data
         WHERE symbol IN ({placeholders})
           AND time <= CAST(:as_of AS date) + INTERVAL '1 day'
-          AND time >= CAST(:as_of AS date) - (:lookback || ' days')::interval
+          AND time >= CAST(:as_of AS date) - INTERVAL '{PRICE_HISTORY_DAYS} days'
         ORDER BY symbol, time
         """
     )
