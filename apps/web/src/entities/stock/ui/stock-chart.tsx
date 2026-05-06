@@ -3,7 +3,15 @@
 import { useEffect, useRef } from 'react';
 
 import type { CandlestickData, IChartApi, SeriesMarker, Time } from 'lightweight-charts';
-import { ColorType, LineStyle, createChart } from 'lightweight-charts';
+import {
+  CandlestickSeries,
+  ColorType,
+  HistogramSeries,
+  LineSeries,
+  LineStyle,
+  createChart,
+  createSeriesMarkers,
+} from 'lightweight-charts';
 
 import { formatPrice, getCurrency } from '@/shared/lib/format-price';
 
@@ -86,7 +94,7 @@ export const StockChart = ({
 
     // (1) 수익률 라인 — 좌측 축 표기를 equity 배수가 아닌 누적 수익률(%)로 오버라이드
     if (backtestData.length > 0) {
-      const strategySeries = chart.addLineSeries({
+      const strategySeries = chart.addSeries(LineSeries, {
         color: '#0b1c30',
         lineWidth: 2,
         priceScaleId: 'left',
@@ -110,7 +118,7 @@ export const StockChart = ({
     }
 
     // (2) 캔들스틱
-    const candleSeries = chart.addCandlestickSeries({
+    const candleSeries = chart.addSeries(CandlestickSeries, {
       upColor: '#006c49',
       downColor: '#ba1a1a',
       borderVisible: false,
@@ -123,13 +131,13 @@ export const StockChart = ({
 
     // 마커 세팅 (데이터가 렌더링된 후 호출)
     if (markers.length > 0) {
-      candleSeries.setMarkers(markers);
+      createSeriesMarkers(candleSeries, markers);
     }
 
     // (3) 이동평균선 (SMA) — Short: blue, Long: amber (둘 다 non-semantic)
     if (visibleIndicators.sma) {
       if (data.some((d) => typeof d.sma_s === 'number')) {
-        const smaShortSeries = chart.addLineSeries({
+        const smaShortSeries = chart.addSeries(LineSeries, {
           color: '#2563eb',
           lineWidth: 2,
           priceScaleId: 'right',
@@ -144,7 +152,7 @@ export const StockChart = ({
       }
 
       if (data.some((d) => typeof d.sma_l === 'number')) {
-        const smaLongSeries = chart.addLineSeries({
+        const smaLongSeries = chart.addSeries(LineSeries, {
           color: '#f59e0b',
           lineWidth: 2,
           priceScaleId: 'right',
@@ -162,7 +170,7 @@ export const StockChart = ({
     // (4) 볼린저 밴드 — 옅은 슬레이트 밴드로 배경처럼 처리
     if (visibleIndicators.bollinger && data.some((d) => typeof d.bb_u === 'number')) {
       const createBB = (color: string, width: 1 | 2 = 1) =>
-        chart.addLineSeries({
+        chart.addSeries(LineSeries, {
           color,
           lineWidth: width,
           lineStyle: LineStyle.Solid,
@@ -199,7 +207,7 @@ export const StockChart = ({
 
     // MACD 그리기 (맨 아래 배치)
     if (visibleIndicators.macd && data.some((d) => typeof d.macd_h === 'number')) {
-      const macdSeries = chart.addHistogramSeries({
+      const macdSeries = chart.addSeries(HistogramSeries, {
         priceScaleId: 'macd',
         title: 'MACD',
       });
@@ -233,7 +241,7 @@ export const StockChart = ({
 
     // RSI 그리기 (MACD 바로 위)
     if (visibleIndicators.rsi && data.some((d) => typeof d.rsi === 'number')) {
-      const rsiSeries = chart.addLineSeries({
+      const rsiSeries = chart.addSeries(LineSeries, {
         color: '#8b5cf6',
         lineWidth: 2,
         priceScaleId: 'rsi',

@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react';
 
 import type { IChartApi, Time } from 'lightweight-charts';
-import { ColorType, LineStyle, createChart } from 'lightweight-charts';
+import { ColorType, LineSeries, LineStyle, createChart } from 'lightweight-charts';
 
 import type { PortfolioBacktestResult } from '@/entities/portfolio/model/types';
 
@@ -22,6 +22,7 @@ export const BacktestChart = ({ result, isLoading }: Props) => {
     if (!containerRef.current || !result || result.equity.length === 0) return;
 
     const chart = createChart(containerRef.current, {
+      autoSize: true,
       layout: {
         background: { type: ColorType.Solid, color: '#ffffff' },
         textColor: '#434655',
@@ -31,14 +32,12 @@ export const BacktestChart = ({ result, isLoading }: Props) => {
         vertLines: { color: '#eef2ff' },
         horzLines: { color: '#eef2ff' },
       },
-      width: containerRef.current.clientWidth,
-      height: containerRef.current.clientHeight || 360,
       rightPriceScale: { borderColor: '#c3c6d7' },
       timeScale: { borderColor: '#c3c6d7', barSpacing: 4 },
     });
     chartRef.current = chart;
 
-    const portfolioSeries = chart.addLineSeries({
+    const portfolioSeries = chart.addSeries(LineSeries, {
       color: '#004ac6',
       lineWidth: 2,
       title: 'Portfolio',
@@ -53,7 +52,7 @@ export const BacktestChart = ({ result, isLoading }: Props) => {
     });
 
     if (result.benchmark.length > 0) {
-      const benchSeries = chart.addLineSeries({
+      const benchSeries = chart.addSeries(LineSeries, {
         color: '#64748b',
         lineWidth: 1,
         lineStyle: LineStyle.Dashed,
@@ -64,22 +63,19 @@ export const BacktestChart = ({ result, isLoading }: Props) => {
 
     chart.timeScale().fitContent();
 
-    const handleResize = () => {
-      if (!containerRef.current) return;
-      chart.applyOptions({
-        width: containerRef.current.clientWidth,
-        height: containerRef.current.clientHeight,
-      });
-    };
-    const ro = new ResizeObserver(handleResize);
-    ro.observe(containerRef.current);
-    window.addEventListener('resize', handleResize);
     return () => {
-      ro.disconnect();
-      window.removeEventListener('resize', handleResize);
       chart.remove();
     };
   }, [result]);
+
+  const showChart = !isLoading && result && result.equity.length > 0;
+  const overlayMessage = isLoading
+    ? null
+    : !result
+      ? '시뮬레이션 실행 버튼을 누르면 과거 성과가 표시됩니다'
+      : result.equity.length === 0
+        ? (result.note ?? '데이터가 부족합니다')
+        : null;
 
   return (
     <div className="border-outline-variant/30 bg-surface-container-lowest flex flex-col gap-3 rounded-xl border p-5">
@@ -98,28 +94,22 @@ export const BacktestChart = ({ result, isLoading }: Props) => {
         )}
       </div>
 
-      {isLoading && (
-        <div className="text-on-surface-variant flex h-[420px] flex-col items-center justify-center gap-3 text-xs">
-          <Spinner size={32} />
-          <span>시뮬레이션 계산 중… (수 초 소요)</span>
-        </div>
-      )}
-
-      {!isLoading && !result && (
-        <div className="border-outline-variant/40 text-on-surface-variant flex h-[420px] items-center justify-center rounded-md border border-dashed text-xs">
-          시뮬레이션 실행 버튼을 누르면 과거 성과가 표시됩니다
-        </div>
-      )}
-
-      {!isLoading && result && result.equity.length > 0 && (
-        <div ref={containerRef} className="min-h-[320px] w-full flex-1" />
-      )}
-
-      {!isLoading && result && result.equity.length === 0 && (
-        <div className="border-outline-variant/40 text-on-surface-variant flex h-[420px] items-center justify-center rounded-md border border-dashed text-center text-xs">
-          {result.note ?? '데이터가 부족합니다'}
-        </div>
-      )}
+      {/* 컨테이너는 항상 렌더 — mount/unmount 반복 시 lightweight-charts 의 첫 paint 가
+          누락되는 이슈 회피. 상태 표시는 위에 overlay. */}
+      <div className="relative h-[360px] w-full">
+        <div ref={containerRef} className={`h-full w-full ${showChart ? '' : 'invisible'}`} />
+        {isLoading && (
+          <div className="text-on-surface-variant absolute inset-0 flex flex-col items-center justify-center gap-3 text-xs">
+            <Spinner size={32} />
+            <span>시뮬레이션 계산 중… (수 초 소요)</span>
+          </div>
+        )}
+        {overlayMessage && (
+          <div className="border-outline-variant/40 text-on-surface-variant absolute inset-0 flex items-center justify-center rounded-md border border-dashed text-center text-xs">
+            {overlayMessage}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
