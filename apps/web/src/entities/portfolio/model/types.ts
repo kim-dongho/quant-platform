@@ -148,7 +148,7 @@ export interface DiscoverJobStarted {
   job_id: string;
 }
 
-export type DiscoverJobStatus = 'running' | 'done' | 'error';
+export type DiscoverJobStatus = 'running' | 'done' | 'error' | 'cancelled';
 
 export interface DiscoverJobState {
   status: DiscoverJobStatus;

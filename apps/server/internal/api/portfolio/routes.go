@@ -14,4 +14,5 @@ func RegisterRoutes(api fiber.Router) {
 	g.Post("/discover", DiscoverPortfolio)
 	g.Post("/discover/start", StartDiscover)
 	g.Get("/discover/status/:job_id", DiscoverStatus)
+	g.Post("/discover/cancel/:job_id", DiscoverCancel)
 }

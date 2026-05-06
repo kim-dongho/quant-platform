@@ -45,3 +45,7 @@ export const getDiscoverStatus = async (jobId: string): Promise<DiscoverJobState
   const { data } = await apiClient.get<DiscoverJobState>(`/portfolio/discover/status/${jobId}`);
   return data;
 };
+
+export const cancelDiscover = async (jobId: string): Promise<void> => {
+  await apiClient.post(`/portfolio/discover/cancel/${jobId}`);
+};

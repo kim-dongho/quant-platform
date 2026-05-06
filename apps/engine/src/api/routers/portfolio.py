@@ -1,4 +1,5 @@
 """포트폴리오 스크리닝·백테스트·자동 탐색 라우터."""
+
 from __future__ import annotations
 
 import threading
@@ -104,12 +105,18 @@ def _run_discover_job(job_id: str, params: Dict[str, Any]) -> None:
                 job["total"] = total
                 job["current"] = label
 
+    def should_cancel() -> bool:
+        with _DISCOVER_JOBS_LOCK:
+            job = _DISCOVER_JOBS.get(job_id)
+            return bool(job and job.get("cancel_requested"))
+
     try:
-        result = discover(progress_cb=progress, **params)
+        result = discover(progress_cb=progress, should_cancel=should_cancel, **params)
         with _DISCOVER_JOBS_LOCK:
             job = _DISCOVER_JOBS.get(job_id)
             if job is not None:
-                job["status"] = "done"
+                # 사용자 cancel 요청으로 끝났으면 status=cancelled, 아니면 done.
+                job["status"] = "cancelled" if result.get("cancelled") else "done"
                 job["result"] = result
                 job["ended_at"] = time.time()
     except Exception as e:
@@ -159,3 +166,16 @@ def discover_status(job_id: str):
         if job is None:
             raise HTTPException(status_code=404, detail="Job not found or expired")
         return dict(job)
+
+
+@router.post("/discover/cancel/{job_id}")
+def discover_cancel(job_id: str):
+    """진행 중인 grid search 취소 요청. discover loop 가 다음 iter 진입 시 멈춤."""
+    with _DISCOVER_JOBS_LOCK:
+        job = _DISCOVER_JOBS.get(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="Job not found or expired")
+        if job.get("status") not in ("running", None):
+            return {"job_id": job_id, "status": job.get("status"), "cancelled": False}
+        job["cancel_requested"] = True
+    return {"job_id": job_id, "status": "cancelling", "cancelled": True}

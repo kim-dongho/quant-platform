@@ -3,6 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import type { DiscoverJobState, RuleConfig } from '../model/types';
 import {
   backtestPortfolio,
+  cancelDiscover,
   discoverStrategies,
   getDiscoverStatus,
   screenPortfolio,
@@ -27,6 +28,11 @@ export const useDiscoverStrategies = () =>
 export const useStartDiscover = () =>
   useMutation({
     mutationFn: startDiscover,
+  });
+
+export const useCancelDiscover = () =>
+  useMutation({
+    mutationFn: cancelDiscover,
   });
 
 /** job_id가 있으면 1초마다 status polling. status === 'running'이 아니면 polling 중단. */

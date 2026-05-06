@@ -2,7 +2,11 @@
 
 import { useState } from 'react';
 
-import { useDiscoverJobStatus, useStartDiscover } from '@/entities/portfolio/api/portfolio-queries';
+import {
+  useCancelDiscover,
+  useDiscoverJobStatus,
+  useStartDiscover,
+} from '@/entities/portfolio/api/portfolio-queries';
 import type {
   Clause,
   DiscoverJobState,
@@ -36,6 +40,7 @@ export const DiscoverDialog = ({ open, onClose, defaults, exitPolicy, onApply }:
   const [jobId, setJobId] = useState<string | null>(null);
 
   const startMutation = useStartDiscover();
+  const cancelMutation = useCancelDiscover();
   const statusQuery = useDiscoverJobStatus(jobId);
   const job: DiscoverJobState | undefined = statusQuery.data;
 
@@ -65,6 +70,12 @@ export const DiscoverDialog = ({ open, onClose, defaults, exitPolicy, onApply }:
   const reset = () => {
     setJobId(null);
     startMutation.reset();
+    cancelMutation.reset();
+  };
+
+  const handleCancel = () => {
+    if (!jobId) return;
+    cancelMutation.mutate(jobId);
   };
 
   const factorCount = selectedFactors.size;
@@ -73,7 +84,9 @@ export const DiscoverDialog = ({ open, onClose, defaults, exitPolicy, onApply }:
   const expectedSeconds = Math.max(15, Math.round((combos * 0.15 * 2) / 1));
 
   const isRunning = !!jobId && (!job || job.status === 'running');
-  const result = job?.status === 'done' ? job.result : undefined;
+  // cancelled 상태일 때도 부분 결과(평가된 조합) 를 그대로 표시 — 사용자가 의도적으로 끊은
+  // 것이니 done 과 동일하게 처리.
+  const result = job?.status === 'done' || job?.status === 'cancelled' ? job.result : undefined;
   const errorMsg =
     startMutation.error?.message ?? (job?.status === 'error' ? job.error : undefined) ?? null;
 
@@ -121,6 +134,8 @@ export const DiscoverDialog = ({ open, onClose, defaults, exitPolicy, onApply }:
               current={job?.current ?? '준비 중…'}
               startedAt={job?.started_at}
               expectedSeconds={expectedSeconds}
+              onCancel={jobId ? handleCancel : undefined}
+              cancelling={cancelMutation.isPending || !!cancelMutation.data}
             />
           )}
 

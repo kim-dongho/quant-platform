@@ -175,3 +175,17 @@ func DiscoverStatus(c *fiber.Ctx) error {
 	jobID := c.Params("job_id")
 	return proxy.Get(c, proxy.EngineBase+"/portfolio/discover/status/"+jobID)
 }
+
+// DiscoverCancel godoc
+// @Summary      전략 자동 탐색 취소
+// @Description  진행 중인 grid search 에 cancel 요청 — 다음 iteration 진입 시 멈추고 지금까지 결과 반환.
+// @Tags         portfolio
+// @Produce      json
+// @Param        job_id   path      string  true  "Job ID"
+// @Success      200      {object}  map[string]interface{}
+// @Failure      404      {object}  map[string]string
+// @Router       /portfolio/discover/cancel/{job_id} [post]
+func DiscoverCancel(c *fiber.Ctx) error {
+	jobID := c.Params("job_id")
+	return proxy.Post(c, proxy.EngineBase+"/portfolio/discover/cancel/"+jobID)
+}

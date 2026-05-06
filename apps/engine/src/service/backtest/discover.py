@@ -12,6 +12,7 @@
 ⚠️ Multiple-testing 함정: 수백 조합을 한 번에 시험하면 우연히 좋아 보이는 게
    섞이게 됩니다. test 기간에서도 좋아야 의미있고, 그래도 미래는 보장되지 않습니다.
 """
+
 from __future__ import annotations
 
 import itertools
@@ -124,6 +125,7 @@ def discover(
     n_clauses: int = 1,
     top_n: int = 5,
     progress_cb: Optional[Callable[[int, int, str], None]] = None,
+    should_cancel: Optional[Callable[[], bool]] = None,
 ) -> Dict[str, Any]:
     """
     Grid search.
@@ -198,7 +200,11 @@ def discover(
     # 3) 각 조합 평가
     results: List[Dict[str, Any]] = []
     skipped = 0
+    cancelled = False
     for i, clauses in enumerate(combos):
+        if should_cancel and should_cancel():
+            cancelled = True
+            break
         label = _format_clauses(clauses)
         if progress_cb:
             progress_cb(i + 1, total, label)
@@ -245,9 +251,7 @@ def discover(
     #    2순위: alpha 평균 (벤치마크 초과수익)
     #    3순위: sharpe 평균 (위험조정 수익)
     def _sort_key(r: Dict[str, Any]) -> tuple:
-        both_positive = (
-            (1 if r["train_alpha"] > 0 else 0) + (1 if r["test_alpha"] > 0 else 0)
-        )
+        both_positive = (1 if r["train_alpha"] > 0 else 0) + (1 if r["test_alpha"] > 0 else 0)
         return (
             both_positive,
             (r["train_alpha"] + r["test_alpha"]) / 2,
@@ -269,6 +273,7 @@ def discover(
         },
         "evaluated": len(results),
         "skipped": skipped,
+        "cancelled": cancelled,
         "top": results[:top_n],
         "all": results,
     }

@@ -12,12 +12,16 @@ export const DiscoverProgress = ({
   current,
   startedAt,
   expectedSeconds,
+  onCancel,
+  cancelling = false,
 }: {
   done: number;
   total: number;
   current: string;
   startedAt?: number;
   expectedSeconds: number;
+  onCancel?: () => void;
+  cancelling?: boolean;
 }) => {
   const pct = total > 0 ? Math.min(100, (done / total) * 100) : 0;
   const elapsedSec = startedAt ? Math.max(0, Math.round(Date.now() / 1000 - startedAt)) : 0;
@@ -59,6 +63,20 @@ export const DiscoverProgress = ({
           남은 예상: <b className="text-on-surface font-mono tabular-nums">{fmtSeconds(etaSec)}</b>
         </span>
       </div>
+
+      {onCancel && (
+        <div className="flex justify-end pt-1">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={cancelling}
+            className="border-error/40 text-error hover:bg-error-container/30 inline-flex items-center gap-1 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50"
+          >
+            <span className="material-symbols-outlined text-[14px]">close</span>
+            {cancelling ? '취소 중…' : '탐색 취소'}
+          </button>
+        </div>
+      )}
     </div>
   );
 };
