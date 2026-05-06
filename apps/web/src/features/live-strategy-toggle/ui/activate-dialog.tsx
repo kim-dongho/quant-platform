@@ -7,6 +7,7 @@ import type { LiveStrategy } from '@/entities/live-strategy/model/types';
 import type { ExitPolicy, RuleConfig } from '@/entities/portfolio/model/types';
 
 import { useAlert } from '@/shared/ui/dialog/dialog-provider';
+import { NumberInput } from '@/shared/ui/number-input';
 
 import { formatClauseList, getUniverseLabel } from './live-strategy-toggle';
 
@@ -173,12 +174,11 @@ export const ActivateDialog = ({ config, exitPolicy, existing, onClose }: Props)
 
             {sizeMode === 'fixed' ? (
               <>
-                <input
-                  type="number"
+                <NumberInput
                   min={10000}
                   step={100000}
                   value={positionSize}
-                  onChange={(e) => setPositionSize(Number(e.target.value) || 0)}
+                  onChange={setPositionSize}
                   className="border-outline-variant bg-surface text-on-surface focus:border-primary w-full rounded-lg border px-3 py-2 text-right font-mono text-sm tabular-nums outline-none"
                 />
                 <p className="text-on-surface-variant mt-1 text-[11px]">

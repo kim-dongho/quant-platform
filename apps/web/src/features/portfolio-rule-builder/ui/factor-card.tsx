@@ -1,6 +1,8 @@
 import { FACTOR_OPTIONS, OPS } from '@/entities/portfolio/model/factors';
 import type { Clause, FactorKey, FactorOp } from '@/entities/portfolio/model/types';
 
+import { NumberInput } from '@/shared/ui/number-input';
+
 import { RuleCardShell } from './rule-card-shell';
 
 // 진입 팩터(매수 조건) 카드.
@@ -44,11 +46,10 @@ export const FactorCard = ({
             </option>
           ))}
         </select>
-        <input
-          type="number"
+        <NumberInput
           value={clause.value}
           step={opt?.step ?? 0.1}
-          onChange={(e) => onChange({ value: Number(e.target.value) })}
+          onChange={(value) => onChange({ value })}
           className="border-outline-variant/50 bg-surface focus:border-primary focus:ring-primary w-20 shrink-0 rounded-md border px-1.5 py-1 text-right font-mono text-xs tabular-nums outline-none focus:ring-1"
         />
       </div>

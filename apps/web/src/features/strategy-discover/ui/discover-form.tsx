@@ -1,6 +1,8 @@
 import { UNIVERSE_OPTIONS } from '@/entities/portfolio/model/factors';
 import type { FactorKey } from '@/entities/portfolio/model/types';
 
+import { NumberInput } from '@/shared/ui/number-input';
+
 import {
   ABSOLUTE_FACTORS,
   SELECTABLE_FACTORS,
@@ -102,24 +104,22 @@ export const DiscoverForm = ({
 
       <label className="flex flex-col gap-1">
         <span className="text-on-surface-variant text-[11px]">최대 보유 종목</span>
-        <input
-          type="number"
+        <NumberInput
           min={1}
           max={50}
           value={maxPositions}
-          onChange={(e) => setMaxPositions(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
+          onChange={setMaxPositions}
           className="border-outline-variant/50 bg-surface focus:border-primary rounded-md border px-2 py-1.5 text-xs outline-none"
         />
       </label>
 
       <label className="flex flex-col gap-1">
         <span className="text-on-surface-variant text-[11px]">상위 N개</span>
-        <input
-          type="number"
+        <NumberInput
           min={1}
           max={20}
           value={topN}
-          onChange={(e) => setTopN(Math.max(1, Math.min(20, Number(e.target.value) || 1)))}
+          onChange={setTopN}
           className="border-outline-variant/50 bg-surface focus:border-primary rounded-md border px-2 py-1.5 text-xs outline-none"
         />
       </label>

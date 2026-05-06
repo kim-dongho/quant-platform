@@ -5,6 +5,8 @@ import { useEffect, useState } from 'react';
 import { useUpdateLiveStrategySize } from '@/entities/live-strategy/api/live-strategy-queries';
 import type { LiveStrategy } from '@/entities/live-strategy/model/types';
 
+import { NumberInput } from '@/shared/ui/number-input';
+
 interface Props {
   strategy: LiveStrategy;
   onClose: () => void;
@@ -108,12 +110,11 @@ export const PositionSizeDialog = ({ strategy, onClose }: Props) => {
 
             {sizeMode === 'fixed' ? (
               <>
-                <input
-                  type="number"
+                <NumberInput
                   min={10000}
                   step={100000}
                   value={positionSize}
-                  onChange={(e) => setPositionSize(Number(e.target.value) || 0)}
+                  onChange={setPositionSize}
                   className="border-outline-variant bg-surface text-on-surface focus:border-primary w-full rounded-lg border px-3 py-2 text-right font-mono text-sm tabular-nums outline-none"
                 />
                 <p className="text-on-surface-variant mt-1 text-[11px]">

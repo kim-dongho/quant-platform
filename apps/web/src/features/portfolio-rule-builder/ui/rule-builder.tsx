@@ -9,6 +9,8 @@ import {
 } from '@/entities/portfolio/model/strategy-templates';
 import type { Clause, ExitPolicy, FactorKey, RuleConfig } from '@/entities/portfolio/model/types';
 
+import { NumberInput } from '@/shared/ui/number-input';
+
 import { EXIT_CARD_META, type ExitCardMeta } from '../model/exit-meta';
 import { AddRuleMenu } from './add-rule-menu';
 import { ExitCard } from './exit-card';
@@ -164,17 +166,11 @@ export const RuleBuilder = ({
         <label className="flex items-center justify-between gap-2">
           <span className="text-on-surface-variant shrink-0 text-[11px]">최대 보유 종목</span>
           <div className="flex items-center gap-1.5">
-            <input
-              type="number"
+            <NumberInput
               min={1}
               max={50}
               value={config.max_positions}
-              onChange={(e) =>
-                onChange({
-                  ...config,
-                  max_positions: Math.max(1, Math.min(50, Number(e.target.value) || 1)),
-                })
-              }
+              onChange={(max_positions) => onChange({ ...config, max_positions })}
               className="border-outline-variant/50 bg-surface focus:border-primary focus:ring-primary w-16 rounded-md border px-1.5 py-1 text-right font-mono text-xs tabular-nums outline-none focus:ring-1"
             />
             <span className="text-on-surface-variant text-[11px]">종목</span>
