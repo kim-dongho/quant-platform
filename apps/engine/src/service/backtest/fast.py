@@ -20,11 +20,11 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
+import connectorx as cx
 import numpy as np
 import pandas as pd
-from sqlalchemy import text
 
-from src.core.database import engine
+from src.core.database import CONNECTORX_URL
 from src.service.factor import FACTOR_COLUMNS
 from src.service.backtest.portfolio import (
     _ensure_benchmark_data,
@@ -62,34 +62,31 @@ class DataCache:
         _ensure_benchmark_data(bench_symbol)
 
         all_syms = symbols + [bench_symbol]
-        params: Dict[str, Any] = {"symbols": all_syms, "start": start, "end": end}
+        # connectorx 는 named params 미지원 → 통제된 input (universe symbols, ISO 날짜)
+        # 라 SQL 에 직접 인라인. ' 는 SQL injection 방지를 위해 escape.
+        syms_lit = ", ".join("'" + s.replace("'", "''") + "'" for s in all_syms)
 
         cols_sql = ", ".join(FACTOR_COLUMNS)
-        # ANY(:symbols::text[]) 으로 plan cache 친화적, CAST 로 chunk pruning 명시 활성.
-        q_factors = text(
-            f"""
+        q_factors = f"""
             SELECT time::date AS date, symbol, {cols_sql}
             FROM factors
-            WHERE symbol = ANY(:symbols)
-              AND time >= CAST(:start AS timestamptz)
-              AND time < CAST(:end AS date) + INTERVAL '1 day'
-            """
-        )
-        q_close = text(
-            """
+            WHERE symbol IN ({syms_lit})
+              AND time >= '{start}'::timestamptz
+              AND time < ('{end}'::date + INTERVAL '1 day')
+        """
+        q_close = f"""
             SELECT time::date AS date, symbol, close
             FROM market_data
-            WHERE symbol = ANY(:symbols)
-              AND time >= CAST(:start AS timestamptz)
-              AND time < CAST(:end AS date) + INTERVAL '1 day'
-            """
-        )
+            WHERE symbol IN ({syms_lit})
+              AND time >= '{start}'::timestamptz
+              AND time < ('{end}'::date + INTERVAL '1 day')
+        """
 
-        # 두 SQL 을 병렬 실행 — universe×10년 fetch 가 직렬이면 시작 지연의 주범.
-        # SQLAlchemy engine 이 connection pool 을 가지니 thread 별 별도 connection.
-        def _fetch(query):
-            with engine.connect() as conn:
-                return pd.read_sql(query, conn, params=params)
+        # connectorx + ThreadPoolExecutor 로 두 SQL 병렬. connectorx 는 native binary
+        # protocol + arrow 변환으로 pd.read_sql 의 row-by-row Python conversion 보다
+        # 5-10배 빠름. universe×10년 fetch 가 시작 지연의 주범이었음.
+        def _fetch(query: str) -> pd.DataFrame:
+            return cx.read_sql(CONNECTORX_URL, query, return_type="pandas")
 
         with ThreadPoolExecutor(max_workers=2) as ex:
             f_factors = ex.submit(_fetch, q_factors)

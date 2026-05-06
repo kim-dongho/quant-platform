@@ -11,3 +11,7 @@ python-dateutil
 beautifulsoup4
 lxml
 finance-datareader
+# 큰 SQL fetch 가속 — connectorx 는 multi-thread + arrow 로 pd.read_sql 보다 5-10배 빠름.
+# polars 는 connectorx 결과를 받는 dataframe 라이브러리 (필요 시 .to_pandas() 로 호환).
+polars
+connectorx

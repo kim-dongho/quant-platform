@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 
+import connectorx as cx
 import numpy as np
 import pandas as pd
 from sqlalchemy import text
@@ -35,7 +36,7 @@ def _safe_float(v, default: float = 0.0) -> float:
     return f if math.isfinite(f) else default
 
 
-from src.core.database import engine
+from src.core.database import CONNECTORX_URL, engine
 from src.service.factor import FACTOR_COLUMNS
 from src.service.factor import (
     ScreenError,
@@ -156,26 +157,27 @@ def _ensure_benchmark_data(symbol: str) -> bool:
 # ---------------------------------------------------------------------------
 # 데이터 로더 (기존 유지)
 # ---------------------------------------------------------------------------
+def _symbols_to_sql_list(symbols: List[str]) -> str:
+    """universe symbols 리스트를 SQL IN list 로 직렬화. 작은따옴표 escape 포함."""
+    return ", ".join("'" + s.replace("'", "''") + "'" for s in symbols)
+
+
 def _load_factors(symbols: List[str], start: str, end: str) -> pd.DataFrame:
     """factors hypertable 에서 [start, end] 범위의 daily factor 스냅샷 로드.
 
-    DISTINCT ON (time::date) 은 함수 표현식이라 PK 인덱스를 못 타서 sort 비용이
-    큼. 대신 단순 SELECT 후 Python 에서 dedupe — 같은 날 여러 row 인 경우
-    (yfinance timezone 으로 인한 dup) 더 늦은 timestamp 만 남김.
-    `symbol = ANY(:symbols)` 도 IN 350 개 placeholder 보다 plan cache 친화적.
+    connectorx 사용 — pd.read_sql 의 row-by-row Python conversion 우회.
+    같은 날 여러 row 면 (yfinance timezone dup) Python 에서 늦은 timestamp 만 keep.
     """
-    query = text(
-        f"""
-        SELECT time, symbol, {", ".join(FACTOR_COLUMNS)}
+    syms_lit = _symbols_to_sql_list(symbols)
+    cols_sql = ", ".join(FACTOR_COLUMNS)
+    sql = f"""
+        SELECT time, symbol, {cols_sql}
         FROM factors
-        WHERE symbol = ANY(:symbols)
-          AND time >= CAST(:start AS timestamptz)
-          AND time < CAST(:end AS date) + INTERVAL '1 day'
-        ORDER BY symbol, time
-        """
-    )
-    with engine.connect() as conn:
-        df = pd.read_sql(query, conn, params={"symbols": symbols, "start": start, "end": end})
+        WHERE symbol IN ({syms_lit})
+          AND time >= '{start}'::timestamptz
+          AND time < ('{end}'::date + INTERVAL '1 day')
+    """
+    df = cx.read_sql(CONNECTORX_URL, sql, return_type="pandas")
     if df.empty:
         return df
     df["date"] = pd.to_datetime(df["time"]).dt.normalize()
@@ -185,18 +187,15 @@ def _load_factors(symbols: List[str], start: str, end: str) -> pd.DataFrame:
 
 def _load_closes(symbols: List[str], start: str, end: str) -> pd.DataFrame:
     """market_data hypertable 에서 daily close. wide (date × symbol) 으로 pivot."""
-    query = text(
-        """
+    syms_lit = _symbols_to_sql_list(symbols)
+    sql = f"""
         SELECT time, symbol, close
         FROM market_data
-        WHERE symbol = ANY(:symbols)
-          AND time >= CAST(:start AS timestamptz)
-          AND time < CAST(:end AS date) + INTERVAL '1 day'
-        ORDER BY symbol, time
-        """
-    )
-    with engine.connect() as conn:
-        long_df = pd.read_sql(query, conn, params={"symbols": symbols, "start": start, "end": end})
+        WHERE symbol IN ({syms_lit})
+          AND time >= '{start}'::timestamptz
+          AND time < ('{end}'::date + INTERVAL '1 day')
+    """
+    long_df = cx.read_sql(CONNECTORX_URL, sql, return_type="pandas")
     if long_df.empty:
         return pd.DataFrame()
     long_df["date"] = pd.to_datetime(long_df["time"]).dt.normalize()
