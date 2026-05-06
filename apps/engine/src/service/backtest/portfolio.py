@@ -156,56 +156,50 @@ def _ensure_benchmark_data(symbol: str) -> bool:
 # 데이터 로더 (기존 유지)
 # ---------------------------------------------------------------------------
 def _load_factors(symbols: List[str], start: str, end: str) -> pd.DataFrame:
-    placeholders = ", ".join([f":s{i}" for i in range(len(symbols))])
-    params: Dict[str, Any] = {"start": start, "end": end}
-    for i, s in enumerate(symbols):
-        params[f"s{i}"] = s
+    """factors hypertable 에서 [start, end] 범위의 daily factor 스냅샷 로드.
 
-    # time::date 캐스팅을 WHERE 에서 빼서 TimescaleDB hypertable 의 chunk pruning 활성화.
-    # 캐스팅된 컬럼으로 비교하면 인덱스 + chunk partition 모두 못 타서 풀스캔 발생.
+    DISTINCT ON (time::date) 은 함수 표현식이라 PK 인덱스를 못 타서 sort 비용이
+    큼. 대신 단순 SELECT 후 Python 에서 dedupe — 같은 날 여러 row 인 경우
+    (yfinance timezone 으로 인한 dup) 더 늦은 timestamp 만 남김.
+    `symbol = ANY(:symbols)` 도 IN 350 개 placeholder 보다 plan cache 친화적.
+    """
     query = text(
         f"""
-        SELECT date, symbol, {", ".join(FACTOR_COLUMNS)} FROM (
-            SELECT DISTINCT ON (time::date, symbol)
-                time::date AS date, symbol, {", ".join(FACTOR_COLUMNS)}, time
-            FROM factors
-            WHERE symbol IN ({placeholders})
-              AND time >= CAST(:start AS timestamptz)
-              AND time < CAST(:end AS date) + INTERVAL '1 day'
-            ORDER BY time::date ASC, symbol ASC, time DESC
-        ) t
-        ORDER BY date ASC, symbol ASC
+        SELECT time, symbol, {", ".join(FACTOR_COLUMNS)}
+        FROM factors
+        WHERE symbol = ANY(:symbols)
+          AND time >= CAST(:start AS timestamptz)
+          AND time < CAST(:end AS date) + INTERVAL '1 day'
+        ORDER BY symbol, time
         """
     )
     with engine.connect() as conn:
-        df = pd.read_sql(query, conn, params=params)
-    return df
+        df = pd.read_sql(query, conn, params={"symbols": symbols, "start": start, "end": end})
+    if df.empty:
+        return df
+    df["date"] = pd.to_datetime(df["time"]).dt.normalize()
+    df = df.sort_values("time").drop_duplicates(subset=["date", "symbol"], keep="last")
+    return df.drop(columns=["time"]).reset_index(drop=True)
 
 
 def _load_closes(symbols: List[str], start: str, end: str) -> pd.DataFrame:
-    placeholders = ", ".join([f":s{i}" for i in range(len(symbols))])
-    params: Dict[str, Any] = {"start": start, "end": end}
-    for i, s in enumerate(symbols):
-        params[f"s{i}"] = s
-
+    """market_data hypertable 에서 daily close. wide (date × symbol) 으로 pivot."""
     query = text(
-        f"""
-        SELECT date, symbol, close FROM (
-            SELECT DISTINCT ON (time::date, symbol)
-                time::date AS date, symbol, close, time
-            FROM market_data
-            WHERE symbol IN ({placeholders})
-              AND time >= CAST(:start AS timestamptz)
-              AND time < CAST(:end AS date) + INTERVAL '1 day'
-            ORDER BY time::date ASC, symbol ASC, time DESC
-        ) t
-        ORDER BY date ASC
+        """
+        SELECT time, symbol, close
+        FROM market_data
+        WHERE symbol = ANY(:symbols)
+          AND time >= CAST(:start AS timestamptz)
+          AND time < CAST(:end AS date) + INTERVAL '1 day'
+        ORDER BY symbol, time
         """
     )
     with engine.connect() as conn:
-        long_df = pd.read_sql(query, conn, params=params)
+        long_df = pd.read_sql(query, conn, params={"symbols": symbols, "start": start, "end": end})
     if long_df.empty:
         return pd.DataFrame()
+    long_df["date"] = pd.to_datetime(long_df["time"]).dt.normalize()
+    long_df = long_df.sort_values("time").drop_duplicates(subset=["date", "symbol"], keep="last")
     return long_df.pivot(index="date", columns="symbol", values="close")
 
 
