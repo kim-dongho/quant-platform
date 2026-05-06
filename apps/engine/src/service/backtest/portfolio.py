@@ -426,6 +426,16 @@ def run_portfolio_backtest(
     if len(trading_days) < 2:
         return _empty_result("trading_days < 2", start, end)
 
+    # --- 메인 루프 사전 정리 — 일별 factor / close 를 dict 으로 캐싱.
+    # 기존 매 iter 의 `factors_df[factors_df["date"] == day]` 는 750일 × 262K rows
+    # boolean filter 로 200M+ ops. groupby 1회로 바꿔 O(1) lookup.
+    factors_by_date: Dict[pd.Timestamp, pd.DataFrame] = {
+        d: g.drop(columns="date").set_index("symbol") for d, g in factors_df.groupby("date")
+    }
+    closes_index_set = set(closes.index)
+    empty_factor_df = pd.DataFrame()
+    empty_close_row: pd.Series = pd.Series(dtype=float)
+
     # --- 메인 루프 ---
     cash = _INITIAL_CAPITAL
     positions: Dict[str, Position] = {}
@@ -433,14 +443,15 @@ def run_portfolio_backtest(
     trade_log: List[Dict[str, Any]] = []
 
     for today_idx, day in enumerate(trading_days):
-        day_factors = factors_df[factors_df["date"] == day].set_index("symbol")
+        day_factors = factors_by_date.get(day, empty_factor_df)
+        today_close = closes.loc[day] if day in closes_index_set else empty_close_row
 
         # 1) Exit 평가
         for sym in list(positions.keys()):
             pos = positions[sym]
-            if sym not in closes.columns:
+            if sym not in today_close.index:
                 continue
-            raw_px = closes.loc[day, sym]
+            raw_px = today_close[sym]
             if pd.isnull(raw_px):
                 continue
             px = float(raw_px)
@@ -481,9 +492,9 @@ def run_portfolio_backtest(
             selected = _apply_clauses(day_factors, clauses)
             picks: List[tuple[str, float]] = []
             for sym in selected.index:
-                if sym in positions or sym not in closes.columns:
+                if sym in positions or sym not in today_close.index:
                     continue
-                raw_px = closes.loc[day, sym]
+                raw_px = today_close[sym]
                 if pd.isnull(raw_px):
                     continue
                 picks.append((sym, float(raw_px)))
@@ -512,8 +523,8 @@ def run_portfolio_backtest(
         # 3) 오늘의 총자산 기록
         positions_value = 0.0
         for sym, pos in positions.items():
-            if sym in closes.columns:
-                raw_px = closes.loc[day, sym]
+            if sym in today_close.index:
+                raw_px = today_close[sym]
                 if pd.notnull(raw_px):
                     positions_value += pos.qty * float(raw_px)
         equity = cash + positions_value
