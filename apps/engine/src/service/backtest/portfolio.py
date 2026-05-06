@@ -170,8 +170,8 @@ def _load_factors(symbols: List[str], start: str, end: str) -> pd.DataFrame:
                 time::date AS date, symbol, {", ".join(FACTOR_COLUMNS)}, time
             FROM factors
             WHERE symbol IN ({placeholders})
-              AND time >= :start::timestamptz
-              AND time < (:end::date + INTERVAL '1 day')
+              AND time >= CAST(:start AS timestamptz)
+              AND time < CAST(:end AS date) + INTERVAL '1 day'
             ORDER BY time::date ASC, symbol ASC, time DESC
         ) t
         ORDER BY date ASC, symbol ASC
@@ -195,8 +195,8 @@ def _load_closes(symbols: List[str], start: str, end: str) -> pd.DataFrame:
                 time::date AS date, symbol, close, time
             FROM market_data
             WHERE symbol IN ({placeholders})
-              AND time >= :start::timestamptz
-              AND time < (:end::date + INTERVAL '1 day')
+              AND time >= CAST(:start AS timestamptz)
+              AND time < CAST(:end AS date) + INTERVAL '1 day'
             ORDER BY time::date ASC, symbol ASC, time DESC
         ) t
         ORDER BY date ASC
