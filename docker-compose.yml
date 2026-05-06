@@ -6,12 +6,12 @@ services:
     restart: always
     # parallel hash/sort(/dev/shm) 기본 64MB 한계로 500+ 심볼 DISTINCT ON 쿼리가 터지는 걸 방지
     shm_size: 1gb
-    # - max_locks_per_transaction: 하이퍼테이블 다종목 스캔 시 락 확보 (64 → 512)
+    # - max_locks_per_transaction: 하이퍼테이블 다종목 스캔 시 락 확보 (1m candle 까지 합쳐 chunk ~6700개 환경 고려)
     # - work_mem: DISTINCT ON / sort 가 디스크 spill 없이 메모리에서 처리되도록 상향
     # - shared_buffers: 반복 조회되는 factors/market_data 캐시 확대
     command: >-
       postgres
-      -c max_locks_per_transaction=512
+      -c max_locks_per_transaction=8192
       -c work_mem=64MB
       -c shared_buffers=512MB
     environment:

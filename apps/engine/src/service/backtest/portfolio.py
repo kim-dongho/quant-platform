@@ -33,6 +33,7 @@ def _safe_float(v, default: float = 0.0) -> float:
         return default
     return f if math.isfinite(f) else default
 
+
 from src.core.database import engine
 from src.service.factor import FACTOR_COLUMNS
 from src.service.factor import (
@@ -45,11 +46,11 @@ from src.service.factor import (
 # ---------------------------------------------------------------------------
 # 수수료 / 거래세 / 슬리피지 (근사치, 실제 체결 환경과 차이 있을 수 있음)
 # ---------------------------------------------------------------------------
-_COMMISSION_KR_BUY = 0.00015              # 0.015%
-_COMMISSION_KR_SELL = 0.00015 + 0.0018    # 수수료 + 거래세 0.18%
-_COMMISSION_US = 0.00020                  # 양방향 0.02% 근사
-_SLIPPAGE_KR = 0.001                       # 0.1%
-_SLIPPAGE_US = 0.0005                      # 0.05%
+_COMMISSION_KR_BUY = 0.00015  # 0.015%
+_COMMISSION_KR_SELL = 0.00015 + 0.0018  # 수수료 + 거래세 0.18%
+_COMMISSION_US = 0.00020  # 양방향 0.02% 근사
+_SLIPPAGE_KR = 0.001  # 0.1%
+_SLIPPAGE_US = 0.0005  # 0.05%
 
 
 def _is_krx(symbol: str) -> bool:
@@ -81,10 +82,10 @@ def _net_exit_price(gross_price: float, symbol: str) -> float:
 class ExitPolicy:
     """청산 정책 — 각 필드는 독립적이며 OR 결합으로 평가."""
 
-    stop_loss_pct: Optional[float] = None        # 진입가 대비 하락 % (예: -5.0 = -5%)
-    take_profit_pct: Optional[float] = None      # 진입가 대비 상승 % (예: 10.0 = +10%)
-    trailing_stop_pct: Optional[float] = None    # 최고가 대비 하락 % (예: -8.0)
-    time_exit_days: Optional[int] = None         # 보유 달력일 상한
+    stop_loss_pct: Optional[float] = None  # 진입가 대비 하락 % (예: -5.0 = -5%)
+    take_profit_pct: Optional[float] = None  # 진입가 대비 상승 % (예: 10.0 = +10%)
+    trailing_stop_pct: Optional[float] = None  # 최고가 대비 하락 % (예: -8.0)
+    time_exit_days: Optional[int] = None  # 보유 달력일 상한
     signal_exit_clauses: List[Dict[str, Any]] = field(default_factory=list)
 
     @classmethod
@@ -104,10 +105,10 @@ class ExitPolicy:
 class Position:
     symbol: str
     entry_date: pd.Timestamp
-    entry_idx: int               # trading_days 내 인덱스 — 거래일 경과 계산용
-    entry_price: float           # gross (체결 시장가 — 수수료·슬리피지 미반영)
+    entry_idx: int  # trading_days 내 인덱스 — 거래일 경과 계산용
+    entry_price: float  # gross (체결 시장가 — 수수료·슬리피지 미반영)
     qty: float
-    high_since_entry: float      # trailing용
+    high_since_entry: float  # trailing용
 
 
 # ---------------------------------------------------------------------------
@@ -116,7 +117,7 @@ class Position:
 # universe별 대표 ETF 벤치마크 — (symbol, 표시용 label) 쌍.
 # 미국은 해당 지수 추종 주요 ETF, 국내는 KODEX 시리즈.
 _BENCHMARKS: Dict[str, tuple[str, str]] = {
-    "watchlist": ("SPY", "S&P 500"),                 # 테마형, 대체로 미국 중심
+    "watchlist": ("SPY", "S&P 500"),  # 테마형, 대체로 미국 중심
     "sp500": ("SPY", "S&P 500"),
     "nasdaq100": ("QQQ", "NASDAQ 100"),
     "russell1000": ("IWB", "Russell 1000"),
@@ -124,7 +125,7 @@ _BENCHMARKS: Dict[str, tuple[str, str]] = {
     "russell3000": ("IWV", "Russell 3000"),
     "kospi200": ("069500.KS", "KOSPI 200"),
     "kosdaq150": ("229200.KQ", "KOSDAQ 150"),
-    "krx350": ("292050.KS", "KRX 300"),              # KOSPI+KOSDAQ 대형주 근사
+    "krx350": ("292050.KS", "KRX 300"),  # KOSPI+KOSDAQ 대형주 근사
 }
 
 
@@ -143,6 +144,7 @@ def _ensure_benchmark_data(symbol: str) -> bool:
     print(f"📥 Benchmark {symbol} missing — lazy ingesting before backtest...")
     try:
         from src.service.ingest import save_to_db
+
         save_to_db(symbol)
         return True
     except Exception as e:
@@ -159,6 +161,8 @@ def _load_factors(symbols: List[str], start: str, end: str) -> pd.DataFrame:
     for i, s in enumerate(symbols):
         params[f"s{i}"] = s
 
+    # time::date 캐스팅을 WHERE 에서 빼서 TimescaleDB hypertable 의 chunk pruning 활성화.
+    # 캐스팅된 컬럼으로 비교하면 인덱스 + chunk partition 모두 못 타서 풀스캔 발생.
     query = text(
         f"""
         SELECT date, symbol, {", ".join(FACTOR_COLUMNS)} FROM (
@@ -166,7 +170,8 @@ def _load_factors(symbols: List[str], start: str, end: str) -> pd.DataFrame:
                 time::date AS date, symbol, {", ".join(FACTOR_COLUMNS)}, time
             FROM factors
             WHERE symbol IN ({placeholders})
-              AND time::date BETWEEN :start AND :end
+              AND time >= :start::timestamptz
+              AND time < (:end::date + INTERVAL '1 day')
             ORDER BY time::date ASC, symbol ASC, time DESC
         ) t
         ORDER BY date ASC, symbol ASC
@@ -190,7 +195,8 @@ def _load_closes(symbols: List[str], start: str, end: str) -> pd.DataFrame:
                 time::date AS date, symbol, close, time
             FROM market_data
             WHERE symbol IN ({placeholders})
-              AND time::date BETWEEN :start AND :end
+              AND time >= :start::timestamptz
+              AND time < (:end::date + INTERVAL '1 day')
             ORDER BY time::date ASC, symbol ASC, time DESC
         ) t
         ORDER BY date ASC
@@ -216,12 +222,18 @@ def _apply_clauses(df: pd.DataFrame, clauses: List[Dict[str, Any]]) -> pd.DataFr
         if col not in df.columns:
             continue
         s = df[col]
-        if op == "<": mask &= s < val
-        elif op == "<=": mask &= s <= val
-        elif op == ">": mask &= s > val
-        elif op == ">=": mask &= s >= val
-        elif op == "=": mask &= s == val
-        elif op == "!=": mask &= s != val
+        if op == "<":
+            mask &= s < val
+        elif op == "<=":
+            mask &= s <= val
+        elif op == ">":
+            mask &= s > val
+        elif op == ">=":
+            mask &= s >= val
+        elif op == "=":
+            mask &= s == val
+        elif op == "!=":
+            mask &= s != val
     return df[mask]
 
 
@@ -234,12 +246,18 @@ def _eval_clauses_or(factor_row: pd.Series, clauses: List[Dict[str, Any]]) -> bo
         x = factor_row[col]
         if pd.isnull(x):
             continue
-        if op == "<" and x < val: return True
-        if op == "<=" and x <= val: return True
-        if op == ">" and x > val: return True
-        if op == ">=" and x >= val: return True
-        if op == "=" and x == val: return True
-        if op == "!=" and x != val: return True
+        if op == "<" and x < val:
+            return True
+        if op == "<=" and x <= val:
+            return True
+        if op == ">" and x > val:
+            return True
+        if op == ">=" and x >= val:
+            return True
+        if op == "=" and x == val:
+            return True
+        if op == "!=" and x != val:
+            return True
     return False
 
 
@@ -379,9 +397,7 @@ def run_portfolio_backtest(
         start = start_date
     else:
         start = (
-            datetime.fromisoformat(end).date().replace(
-                year=datetime.fromisoformat(end).year - 3
-            )
+            datetime.fromisoformat(end).date().replace(year=datetime.fromisoformat(end).year - 3)
         ).isoformat()
 
     factors_df = _load_factors(symbols, start, end)
@@ -445,16 +461,18 @@ def run_portfolio_backtest(
             entry_net = _net_entry_price(pos.entry_price, sym)
             ret_pct = (net_px / entry_net - 1) * 100 if entry_net > 0 else 0.0
 
-            trade_log.append({
-                "symbol": sym,
-                "entry_date": pos.entry_date.date().isoformat(),
-                "exit_date": day.date().isoformat(),
-                "entry_price": float(pos.entry_price),
-                "exit_price": px,
-                "return_pct": float(ret_pct),
-                "hold_days": today_idx - pos.entry_idx,  # 거래일 기준
-                "exit_reason": reason,
-            })
+            trade_log.append(
+                {
+                    "symbol": sym,
+                    "entry_date": pos.entry_date.date().isoformat(),
+                    "exit_date": day.date().isoformat(),
+                    "entry_price": float(pos.entry_price),
+                    "exit_price": px,
+                    "return_pct": float(ret_pct),
+                    "hold_days": today_idx - pos.entry_idx,  # 거래일 기준
+                    "exit_reason": reason,
+                }
+            )
             del positions[sym]
 
         # 2) 신규 진입 (빈 슬롯만)
@@ -530,10 +548,14 @@ def run_portfolio_backtest(
         sym_placeholders = ", ".join([f":s{i}" for i in range(len(final_symbols))])
         sym_params = {f"s{i}": s for i, s in enumerate(final_symbols)}
         with engine.connect() as conn:
-            rows = conn.execute(
-                text(f"SELECT symbol, name FROM stocks WHERE symbol IN ({sym_placeholders})"),
-                sym_params,
-            ).mappings().all()
+            rows = (
+                conn.execute(
+                    text(f"SELECT symbol, name FROM stocks WHERE symbol IN ({sym_placeholders})"),
+                    sym_params,
+                )
+                .mappings()
+                .all()
+            )
         for r in rows:
             name_map[r["symbol"]] = r["name"]
 
@@ -544,9 +566,7 @@ def run_portfolio_backtest(
         "benchmark_symbol": benchmark_symbol,
         "benchmark_label": benchmark_label,
         "metrics": metrics,
-        "final_positions": [
-            {"symbol": s, "name": name_map.get(s, s)} for s in final_symbols
-        ],
+        "final_positions": [{"symbol": s, "name": name_map.get(s, s)} for s in final_symbols],
         "trades": trade_log,
         "start_date": start,
         "end_date": end,
