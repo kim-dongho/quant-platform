@@ -441,10 +441,16 @@ def run_portfolio_backtest(
     trade_log: List[Dict[str, Any]] = []
 
     for today_idx, day in enumerate(trading_days):
-        day_factors = factors_by_date.get(day, empty_factor_df)
+        # lag 모델 — 시그널은 어제(t-1) 팩터로 계산, 체결·평가는 오늘(t) 종가.
+        # 라이브 (08:00 ingest=어제 종가 → 15:20 시그널 평가 → 오늘 종가 매수) 와
+        # 동일한 시간 구조로 맞춰 look-ahead bias 제거. 첫 날은 어제가 없어 시그널 비활성.
+        if today_idx == 0:
+            signal_factors = empty_factor_df
+        else:
+            signal_factors = factors_by_date.get(trading_days[today_idx - 1], empty_factor_df)
         today_close = closes.loc[day] if day in closes_index_set else empty_close_row
 
-        # 1) Exit 평가
+        # 1) Exit 평가 — signal_exit 은 어제 팩터, 가격 기반 청산은 오늘 가격.
         for sym in list(positions.keys()):
             pos = positions[sym]
             if sym not in today_close.index:
@@ -458,7 +464,7 @@ def run_portfolio_backtest(
             if px > pos.high_since_entry:
                 pos.high_since_entry = px
 
-            factor_row = day_factors.loc[sym] if sym in day_factors.index else None
+            factor_row = signal_factors.loc[sym] if sym in signal_factors.index else None
             reason = _should_exit(pos, today_idx, px, factor_row, policy)
             if reason is None:
                 continue
@@ -484,10 +490,10 @@ def run_portfolio_backtest(
             )
             del positions[sym]
 
-        # 2) 신규 진입 (빈 슬롯만)
+        # 2) 신규 진입 — 어제 팩터로 통과한 종목을 오늘 종가에 매수 (lag 모델).
         empty_slots = max_positions - len(positions)
-        if empty_slots > 0 and not day_factors.empty:
-            selected = _apply_clauses(day_factors, clauses)
+        if empty_slots > 0 and not signal_factors.empty:
+            selected = _apply_clauses(signal_factors, clauses)
             picks: List[tuple[str, float]] = []
             for sym in selected.index:
                 if sym in positions or sym not in today_close.index:

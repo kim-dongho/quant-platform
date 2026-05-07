@@ -351,7 +351,7 @@ def fast_backtest(
     trades: List[Dict[str, Any]] = []
     equity_records: List[tuple] = []
 
-    for d in dates:
+    for i, d in enumerate(dates):
         # 가격 row (NaN 다수)
         prices = closes.loc[d]
 
@@ -402,10 +402,12 @@ def fast_backtest(
                 }
             )
 
-        # 2-2) 진입 후보 (오늘 통과한 종목 - 이미 보유 - 가격 NaN 제외)
+        # 2-2) 진입 후보 — lag 모델: 어제(t-1) 팩터로 통과한 종목을 오늘 종가에 매수.
+        # 라이브의 "어제 종가 시그널 → 오늘 체결" 구조와 일치. 첫 날은 어제가 없어 스킵.
         slots = max_positions - len(positions)
-        if slots > 0:
-            cand_syms = passing_by_date.get(d, set()) - set(positions.keys())
+        if slots > 0 and i > 0:
+            prev_d = dates[i - 1]
+            cand_syms = passing_by_date.get(prev_d, set()) - set(positions.keys())
             # 가격 있는 것만, 결정성 위해 정렬
             valid = sorted(s for s in cand_syms if s in prices.index and not pd.isna(prices[s]))
             if valid:
