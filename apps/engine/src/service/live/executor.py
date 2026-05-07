@@ -11,6 +11,7 @@
 ⚠️ 시그널 데이터: 어제 종가까지의 factor (오늘 종가는 아직 미확정).
    백테스트와의 일관성을 위해 daily quant 표준 방식(close-on-close)을 따름.
 """
+
 from __future__ import annotations
 
 import time
@@ -43,10 +44,7 @@ def _get_yesterday_close(symbol: str) -> Optional[float]:
     """market_data에서 종목의 가장 최근(=어제) 종가."""
     with engine.connect() as conn:
         row = conn.execute(
-            text(
-                "SELECT close FROM market_data WHERE symbol = :s "
-                "ORDER BY time DESC LIMIT 1"
-            ),
+            text("SELECT close FROM market_data WHERE symbol = :s ORDER BY time DESC LIMIT 1"),
             {"s": symbol},
         ).fetchone()
     return float(row[0]) if row and row[0] is not None else None
@@ -318,9 +316,13 @@ def run_once(dry_run: bool = False) -> dict[str, Any]:
 
     # ─── 3. 시가 갭 필터 ─────────────────────────────────────
     selected: list[tuple[dict[str, Any], float]] = []
-    # 빈 슬롯의 3배까지만 KIS 시가 조회 (rate limit 보수적 운용).
-    # 호출 사이에 sleep을 두어 모의계좌 초당 2건 제한을 회피.
-    for i, c in enumerate(raw_candidates[: open_slots * 3]):
+    # raw_candidates 전체를 순회하되 selected 가 빈 슬롯만큼 차면 즉시 중단.
+    # 이전 구현은 open_slots*3 으로만 잘라서 봤는데, 갭 초과 종목이 그 안에 몰리면
+    # selected 가 0 으로 끝나서 빈 슬롯이 남는 버그. KIS rate limit 은 호출 간
+    # sleep 으로 회피.
+    for i, c in enumerate(raw_candidates):
+        if len(selected) >= open_slots:
+            break
         if i > 0:
             time.sleep(KIS_QUOTE_SLEEP_SEC)
         symbol = c["symbol"]
@@ -333,8 +335,6 @@ def run_once(dry_run: bool = False) -> dict[str, Any]:
             print(f"   🚫 {label}: 시가 갭 {gap:+.2f}% (>±{GAP_FILTER_PCT}%) → 스킵")
             continue
         selected.append((c, gap))
-        if len(selected) >= open_slots:
-            break
 
     # ─── 4. 매수 주문 ────────────────────────────────────────
     # position_size_krw > 0 → 종목당 고정 배분.
@@ -390,10 +390,7 @@ def run_once(dry_run: bool = False) -> dict[str, Any]:
         try:
             with engine.begin() as conn:
                 conn.execute(
-                    text(
-                        "UPDATE live_strategies SET last_rebalance_at = now() "
-                        "WHERE id = :id"
-                    ),
+                    text("UPDATE live_strategies SET last_rebalance_at = now() WHERE id = :id"),
                     {"id": strategy["id"]},
                 )
         except Exception as e:
