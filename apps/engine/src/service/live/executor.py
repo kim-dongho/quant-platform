@@ -24,6 +24,7 @@ from datetime import date
 from src.core.database import engine
 from src.service.kis import KisClient, KisError, get_kis_client
 from src.service.live.hysteresis import evaluate_signal_exit
+from src.service.live.notify import notify_slack
 from src.service.live.strategy import get_active_strategy
 from src.service.live.trades import record_entry, record_exit, sync_with_holdings
 from src.service.backtest import ExitPolicy
@@ -222,11 +223,16 @@ def run_once(dry_run: bool = False) -> dict[str, Any]:
         f"(universe={strategy['universe']}, max_positions={strategy['max_positions']})"
     )
 
+    if not dry_run:
+        notify_slack(f"🕗 *{strategy['name']}* 매매 사이클 시작")
+
     kis = get_kis_client()
     try:
         balance = kis.get_balance()
     except KisError as e:
         print(f"❌ KIS balance failed: {e}")
+        if not dry_run:
+            notify_slack(f"❌ *{strategy['name']}* — KIS 잔고 조회 실패\n```{e}```")
         return {"status": "kis_error", "error": str(e)}
 
     holdings: list[dict[str, Any]] = balance.get("holdings") or []
@@ -303,6 +309,8 @@ def run_once(dry_run: bool = False) -> dict[str, Any]:
         )
     except Exception as e:
         print(f"❌ screen failed: {e}")
+        if not dry_run:
+            notify_slack(f"❌ *{strategy['name']}* — screen 실패\n```{e}```")
         return {"status": "screen_error", "error": str(e), "sells": sells, "buys": []}
 
     # 보유 + 방금 매도한 종목 모두 후보 제외 (sell→buy 한 라운드 왕복 방지).
@@ -397,4 +405,24 @@ def run_once(dry_run: bool = False) -> dict[str, Any]:
             print(f"⚠️  last_rebalance_at 갱신 실패: {e}")
 
     print(f"✅ Live executor done — sells={len(sells)}, buys={len(buys)}")
+
+    # ─── 6. Slack 알림 (실거래만) ─────────────────────────────
+    if not dry_run:
+        # reason 별 매도 카운트 — stop_loss 같은 위험 신호를 사용자가 빨리 알 수 있게
+        from collections import Counter
+
+        reason_counts = Counter(s["reason"] for s in sells)
+        reason_str = ", ".join(f"{r}×{c}" for r, c in reason_counts.most_common()) if sells else "—"
+        sell_lines = "\n".join(f"  🔻 {s['name']} ({s['reason']})" for s in sells[:5]) or "  —"
+        buy_lines = "\n".join(f"  🟢 {b['name']}" for b in buys[:5]) or "  —"
+        more_sells = f"\n  …외 {len(sells) - 5}건" if len(sells) > 5 else ""
+        more_buys = f"\n  …외 {len(buys) - 5}건" if len(buys) > 5 else ""
+        notify_slack(
+            f"🤖 *{strategy['name']}* 매매 완료\n"
+            f"매도 {len(sells)} | 매수 {len(buys)} | 매수가능 ₩{cash:,.0f}\n"
+            f"매도 사유: {reason_str}\n"
+            f"*매도 종목*\n{sell_lines}{more_sells}\n"
+            f"*매수 종목*\n{buy_lines}{more_buys}"
+        )
+
     return {"status": "ok", "sells": sells, "buys": buys}

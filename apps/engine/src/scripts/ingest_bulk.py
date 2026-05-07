@@ -505,4 +505,21 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    from src.service.live.notify import notify_slack
+
+    _ingest_start = time.time()
+    notify_slack("🚀 *ingest_bulk* 시작")
+    try:
+        main()
+        elapsed = time.time() - _ingest_start
+        notify_slack(f"✅ *ingest_bulk* 완료 ({elapsed / 60:.1f}분)")
+    except SystemExit as e:
+        if (e.code or 0) == 0:
+            elapsed = time.time() - _ingest_start
+            notify_slack(f"✅ *ingest_bulk* 완료 ({elapsed / 60:.1f}분, early exit)")
+        else:
+            notify_slack(f"❌ *ingest_bulk* 비정상 종료 (exit code={e.code})")
+        raise
+    except Exception as e:
+        notify_slack(f"❌ *ingest_bulk* 실패\n```{type(e).__name__}: {e}```")
+        raise
