@@ -133,6 +133,20 @@ func BacktestPortfolio(c *fiber.Ctx) error {
 	return proxy.Post(c, proxy.EngineBase+"/portfolio/backtest")
 }
 
+// FactorBacktestPortfolio godoc
+// @Summary      랭킹 기반 펀더멘털 factor 포트폴리오 백테스트 (엔진 프록시)
+// @Description  PBR/PER/ROE/부채비율/영업이익률/총자산회전율 종합 점수 top N% 매수, 분기 리밸런싱.
+// @Tags         portfolio
+// @Accept       json
+// @Produce      json
+// @Param        request  body      map[string]interface{}  true  "Factor backtest request (universe, start_date, end_date, top_pct, rebalance_months)"
+// @Success      200      {object}  map[string]interface{}
+// @Failure      500      {object}  map[string]string
+// @Router       /portfolio/factor-backtest [post]
+func FactorBacktestPortfolio(c *fiber.Ctx) error {
+	return proxy.Post(c, proxy.EngineBase+"/portfolio/factor-backtest")
+}
+
 // DiscoverPortfolio godoc
 // @Summary      전략 자동 탐색 (엔진 프록시, 동기)
 // @Description  Grid search로 train/test 모두에서 우수한 룰 상위 N개를 반환. n_clauses=2는 수분 소요될 수 있음.

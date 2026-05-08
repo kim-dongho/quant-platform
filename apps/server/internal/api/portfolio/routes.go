@@ -11,6 +11,7 @@ func RegisterRoutes(api fiber.Router) {
 	g.Delete("/rules/:id", DeletePortfolioRule)
 	g.Post("/screen", ScreenPortfolio)
 	g.Post("/backtest", BacktestPortfolio)
+	g.Post("/factor-backtest", FactorBacktestPortfolio)
 	g.Post("/discover", DiscoverPortfolio)
 	g.Post("/discover/start", StartDiscover)
 	g.Get("/discover/status/:job_id", DiscoverStatus)

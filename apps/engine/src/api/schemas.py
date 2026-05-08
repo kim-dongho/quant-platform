@@ -1,4 +1,5 @@
 """API 전반에 공유되는 Pydantic 모델."""
+
 from __future__ import annotations
 
 from typing import Any, Dict, List, Literal, Optional
@@ -60,6 +61,18 @@ class DiscoverRequest(BaseModel):
     exit_policy: Optional[ExitPolicyModel] = None
 
 
+class FactorPortfolioBacktestRequest(BaseModel):
+    """랭킹 기반 펀더멘털 factor 포트폴리오 백테스트 요청."""
+
+    universe: str = "kospi200"
+    start_date: str = "2020-01-01"
+    end_date: Optional[str] = None
+    top_pct: float = 0.20
+    rebalance_months: int = 3
+    min_stocks: int = 5
+    factor_dirs: Optional[Dict[str, int]] = None  # 비우면 기본 6 factor
+
+
 # ─── 모의계좌 ───────────────────────────────────────────────
 class PaperOrderRequest(BaseModel):
     symbol: str
@@ -77,4 +90,4 @@ class LiveStrategyRequest(BaseModel):
     max_positions: int = 10
     exit_policy: Optional[ExitPolicyModel] = None
     position_size_krw: int = 1_000_000
-    mode: Literal["paper"] = "paper"
+    mode: Literal["paper", "real"] = "paper"

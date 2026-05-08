@@ -57,6 +57,8 @@ services:
     # 패키지 의존성(requirements.txt) 추가 시에만 docker-compose build engine
     volumes:
       - ./apps/engine/src:/app/src
+      # 스키마 변경 시 컨테이너 재생성해도 init_db 가 항상 최신 sql 을 보도록 mount.
+      - ./apps/engine/migrations:/app/migrations
       # KIS 토큰 파일 영속화 — 컨테이너 재시작 시에도 토큰 재사용 (.gitignore 됨).
       - ./apps/engine/data:/app/data
     # 개발 편의 — Swagger UI(/docs) / OpenAPI 스펙(/openapi.json) 호스트 접근.
@@ -66,6 +68,16 @@ services:
     environment:
       DB_DSN: "postgresql://user:password@db:5432/quant"
       # 한국투자증권(KIS) Open API — .env에서 주입
+      # paper / real mode 별 키 (모의·실전 동시 운영용)
+      KIS_PAPER_APP_KEY: ${KIS_PAPER_APP_KEY:-}
+      KIS_PAPER_APP_SECRET: ${KIS_PAPER_APP_SECRET:-}
+      KIS_PAPER_ACCOUNT_NUMBER: ${KIS_PAPER_ACCOUNT_NUMBER:-}
+      KIS_PAPER_ACCOUNT_PRODUCT_CODE: ${KIS_PAPER_ACCOUNT_PRODUCT_CODE:-01}
+      KIS_REAL_APP_KEY: ${KIS_REAL_APP_KEY:-}
+      KIS_REAL_APP_SECRET: ${KIS_REAL_APP_SECRET:-}
+      KIS_REAL_ACCOUNT_NUMBER: ${KIS_REAL_ACCOUNT_NUMBER:-}
+      KIS_REAL_ACCOUNT_PRODUCT_CODE: ${KIS_REAL_ACCOUNT_PRODUCT_CODE:-01}
+      # 구 통합 키 (mode 별 키 없을 때 fallback)
       KIS_APP_KEY: ${KIS_APP_KEY:-}
       KIS_APP_SECRET: ${KIS_APP_SECRET:-}
       KIS_ACCOUNT_NUMBER: ${KIS_ACCOUNT_NUMBER:-}
@@ -73,6 +85,8 @@ services:
       KIS_MODE: ${KIS_MODE:-paper}
       # Slack 알림 (선택) — 비워두면 알림 비활성
       SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
+      # DART (전자공시) Open API — 펀더멘털 factor 수집용
+      DART_API_KEY: ${DART_API_KEY:-}
     depends_on:
       db:
         condition: service_healthy

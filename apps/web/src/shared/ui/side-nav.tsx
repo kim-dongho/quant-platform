@@ -15,6 +15,12 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/backtest', label: '차트', desc: '종목 차트 보기', icon: 'candlestick_chart' },
   { href: '/portfolio', label: '전략', desc: '조건 만들고 과거 검증', icon: 'rule' },
   {
+    href: '/factor-portfolio',
+    label: '팩터',
+    desc: '펀더멘털 점수 기반 포트폴리오',
+    icon: 'leaderboard',
+  },
+  {
     href: '/live',
     label: '라이브',
     desc: '전략 운용 · 모의계좌 매매',

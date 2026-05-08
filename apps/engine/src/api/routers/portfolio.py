@@ -10,8 +10,17 @@ from typing import Any, Dict
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 
 from src.api.deps import exit_policy_to_dict
-from src.api.schemas import DiscoverRequest, PortfolioBacktestRequest, ScreenRequest
-from src.service.backtest import discover, run_portfolio_backtest
+from src.api.schemas import (
+    DiscoverRequest,
+    FactorPortfolioBacktestRequest,
+    PortfolioBacktestRequest,
+    ScreenRequest,
+)
+from src.service.backtest import (
+    discover,
+    factor_portfolio_backtest,
+    run_portfolio_backtest,
+)
 from src.service.factor import ScreenError, run_screen
 
 router = APIRouter(prefix="/portfolio", tags=["portfolio"])
@@ -48,6 +57,27 @@ def portfolio_backtest_api(req: PortfolioBacktestRequest):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         print(f"❌ Portfolio backtest failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/factor-backtest")
+def factor_portfolio_backtest_api(req: FactorPortfolioBacktestRequest):
+    """랭킹 기반 펀더멘털 factor 포트폴리오 백테스트 (Phase 3 prototype)."""
+    try:
+        from datetime import date
+
+        end = req.end_date or date.today().isoformat()
+        return factor_portfolio_backtest(
+            universe=req.universe,
+            start=req.start_date,
+            end=end,
+            factor_dirs=req.factor_dirs,
+            top_pct=req.top_pct,
+            rebalance_months=req.rebalance_months,
+            min_stocks=req.min_stocks,
+        )
+    except Exception as e:
+        print(f"❌ Factor portfolio backtest failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

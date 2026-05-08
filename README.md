@@ -193,12 +193,21 @@ docker-compose up -d --build
 ./scripts/ingest-universe.sh
 
 # 4. 라이브 매매 cron 등록 — 평일 15:20 KST
+#    paper / real 활성 전략 모두 한 번에 처리 (run-live.sh 가 --mode all 사용)
 crontab -e
 # 다음 한 줄 추가:
 # 20 15 * * 1-5  cd /home/$USER/quant && ./scripts/run-live.sh > /dev/null 2>&1
 
 # 5. 일일 시세 적재 cron 등록 — 평일 17:00 KST (장 마감 후)
 # 0 17 * * 1-5  cd /home/$USER/quant && ./scripts/ingest-universe.sh > /dev/null 2>&1
+
+# 6. 분기 재무제표 (DART) 첫 백필 — 한 번만
+./scripts/ingest-fundamental.sh --sync-codes --universe kospi200 --years 2020 2021 2022 2023 2024 2025
+
+# 7. 매월 분기보고서 갱신 cron — 매월 15일 03시 (Q1 5/15, Q2 8/15, Q3 11/15 ~)
+# 0 3 15 * *  cd /home/$USER/quant && ./scripts/ingest-fundamental.sh \
+#   --universe kospi200 --years 2020 2021 2022 2023 2024 2025 \
+#   --missing-only --refresh-latest > /dev/null 2>&1
 ```
 
 **Reverse proxy & 도메인** — 외부에서 브라우저로 접속하려면 nginx 또는 Caddy

@@ -1,4 +1,5 @@
-"""백테스트 도메인 — 단일 종목, 포트폴리오, fast(grid용), discover."""
+"""백테스트 도메인 — 단일 종목, 포트폴리오, fast(grid용), discover, factor_portfolio."""
+
 from src.service.backtest.discover import (
     DEFAULT_EXIT_POLICY,
     DEFAULT_FACTORS,
@@ -6,6 +7,11 @@ from src.service.backtest.discover import (
     DEFAULT_PERCENTILES,
     discover,
     discover_single_clause,
+)
+from src.service.backtest.factor_portfolio import (
+    DEFAULT_FACTOR_DIRS,
+    compute_composite_scores,
+    factor_portfolio_backtest,
 )
 from src.service.backtest.fast import DataCache, fast_backtest
 from src.service.backtest.portfolio import (
@@ -36,4 +42,7 @@ __all__ = [
     "DEFAULT_OPS",
     "DEFAULT_PERCENTILES",
     "DEFAULT_EXIT_POLICY",
+    "factor_portfolio_backtest",
+    "compute_composite_scores",
+    "DEFAULT_FACTOR_DIRS",
 ]

@@ -71,9 +71,11 @@ CREATE TABLE IF NOT EXISTS live_strategies (
     updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- 활성 전략은 동시에 1개만 허용 (partial unique index)
-CREATE UNIQUE INDEX IF NOT EXISTS ux_live_strategies_active
-    ON live_strategies ((TRUE)) WHERE is_active;
+-- 활성 전략은 mode 당 1개씩만 (paper 1개 + real 1개 동시 운영 가능).
+-- 옛 unique index (전체 1개만 허용) 가 있으면 제거하고 mode 기준으로 재생성.
+DROP INDEX IF EXISTS ux_live_strategies_active;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_live_strategies_active_per_mode
+    ON live_strategies (mode) WHERE is_active;
 
 -- 라이브 매매 trade 로그 — time_exit / trailing_stop 평가에 필요한 진입일·peak 보관
 CREATE TABLE IF NOT EXISTS live_trades (
@@ -98,3 +100,54 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_live_trades_open
 
 CREATE INDEX IF NOT EXISTS ix_live_trades_strategy_open
     ON live_trades (strategy_id) WHERE exit_date IS NULL;
+
+-- DART corp_code ↔ stock symbol 매핑 캐시.
+-- DART API 는 8자리 corp_code 키로 동작하지만 우리 DB·yfinance 는 6자리+suffix.
+-- 매핑은 거의 고정이라 한 번 받아 캐시하면 되며, 신규 상장 시에만 갱신.
+CREATE TABLE IF NOT EXISTS corp_codes (
+    symbol      VARCHAR(20) PRIMARY KEY,  -- '005930.KS'
+    corp_code   VARCHAR(8)  NOT NULL,     -- '00126380'
+    corp_name   TEXT,
+    stock_code  VARCHAR(6),               -- '005930' (KRX 6자리)
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS ix_corp_codes_corp_code ON corp_codes (corp_code);
+
+-- 분기 재무제표 — 펀더멘털 factor (PBR, ROE, 부채비율, PER) 계산용.
+-- 분기당 1 row, 5년치도 200×20=4000 row 로 가벼움 → 하이퍼테이블 불필요.
+CREATE TABLE IF NOT EXISTS fundamental_data (
+    symbol            VARCHAR(20) NOT NULL REFERENCES stocks (symbol),
+    fiscal_quarter    DATE        NOT NULL,        -- 분기말 (예: 2024-03-31)
+    revenue           BIGINT,                       -- 매출액 (원)
+    operating_income  BIGINT,                       -- 영업이익
+    net_income        BIGINT,                       -- 당기순이익
+    total_assets      BIGINT,                       -- 자산총계
+    total_equity      BIGINT,                       -- 자본총계
+    total_liabilities BIGINT,                       -- 부채총계
+    eps_basic         BIGINT,                       -- 보통주 기본 주당이익 (원)
+    ingested_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (symbol, fiscal_quarter)
+);
+
+-- 기존 환경 호환 — 누락 컬럼 자동 보강.
+ALTER TABLE fundamental_data ADD COLUMN IF NOT EXISTS eps_basic BIGINT;
+
+CREATE INDEX IF NOT EXISTS ix_fundamental_quarter ON fundamental_data (fiscal_quarter DESC);
+
+-- 일별 펀더멘털 factor 스냅샷 — 점수화·랭킹용.
+-- (symbol, time) 별로 가장 최근 fundamental_data 와 그날 close 를 결합해 일별 비율 계산.
+CREATE TABLE IF NOT EXISTS fundamental_factors (
+    time             DATE NOT NULL,                  -- 거래일
+    symbol           VARCHAR(20) NOT NULL REFERENCES stocks (symbol),
+    pbr              DOUBLE PRECISION,                -- 시가총액 / 자본총계
+    per              DOUBLE PRECISION,                -- 시가총액 / TTM 순이익
+    roe              DOUBLE PRECISION,                -- TTM 순이익 / 자본총계 × 100 (%)
+    debt_to_equity   DOUBLE PRECISION,                -- 부채총계 / 자본총계 × 100 (%)
+    operating_margin DOUBLE PRECISION,                -- TTM 영업이익 / TTM 매출 × 100 (%)
+    asset_turnover   DOUBLE PRECISION,                -- TTM 매출 / 자산총계 (배)
+    PRIMARY KEY (time, symbol)
+);
+
+CREATE INDEX IF NOT EXISTS ix_fundfactors_symbol_time ON fundamental_factors (symbol, time DESC);
+CREATE INDEX IF NOT EXISTS ix_fundfactors_time ON fundamental_factors (time DESC);
