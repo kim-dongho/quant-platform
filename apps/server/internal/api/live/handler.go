@@ -7,16 +7,38 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+// withMode — query string 의 ?mode=... 를 engine URL 에 그대로 전달.
+// paper / real 분리 운영 시 클라이언트가 mode 를 query 로 명시.
+func withMode(c *fiber.Ctx, base string) string {
+	mode := c.Query("mode")
+	if mode == "" {
+		return base
+	}
+	return base + "?mode=" + mode
+}
+
 // GetLiveStrategy godoc
-// @Summary      현재 활성화된 라이브 전략 조회
-// @Description  활성 전략이 없으면 null 을 반환합니다.
+// @Summary      활성 라이브 전략 조회 (mode 별)
+// @Description  ?mode=paper / real 로 mode 지정. 활성 전략 없으면 null.
 // @Tags         live
 // @Produce      json
-// @Success      200  {object}  map[string]interface{}
-// @Failure      500  {object}  map[string]string
+// @Param        mode  query     string  false  "paper | real (기본 paper)"
+// @Success      200   {object}  map[string]interface{}
+// @Failure      500   {object}  map[string]string
 // @Router       /live/strategy [get]
 func GetLiveStrategy(c *fiber.Ctx) error {
-	return proxy.Get(c, proxy.EngineBase+"/live/strategy")
+	return proxy.Get(c, withMode(c, proxy.EngineBase+"/live/strategy"))
+}
+
+// GetActiveLiveStrategies godoc
+// @Summary      활성 라이브 전략 모두 (paper / real)
+// @Tags         live
+// @Produce      json
+// @Success      200  {array}   map[string]interface{}
+// @Failure      500  {object}  map[string]string
+// @Router       /live/strategies/active [get]
+func GetActiveLiveStrategies(c *fiber.Ctx) error {
+	return proxy.Get(c, proxy.EngineBase+"/live/strategies/active")
 }
 
 // UpsertLiveStrategy godoc
@@ -50,15 +72,16 @@ func PatchLiveStrategy(c *fiber.Ctx) error {
 }
 
 // StopLiveStrategy godoc
-// @Summary      라이브 전략 중지
-// @Description  현재 활성 전략을 비활성화합니다. 활성 전략이 없으면 stopped=false 를 반환합니다.
+// @Summary      라이브 전략 중지 (mode 별)
+// @Description  ?mode=paper / real 로 mode 지정. 활성 전략 없으면 stopped=false.
 // @Tags         live
 // @Produce      json
-// @Success      200  {object}  map[string]interface{}
-// @Failure      500  {object}  map[string]string
+// @Param        mode  query     string  false  "paper | real (기본 paper)"
+// @Success      200   {object}  map[string]interface{}
+// @Failure      500   {object}  map[string]string
 // @Router       /live/strategy [delete]
 func StopLiveStrategy(c *fiber.Ctx) error {
-	return proxy.Delete(c, proxy.EngineBase+"/live/strategy")
+	return proxy.Delete(c, withMode(c, proxy.EngineBase+"/live/strategy"))
 }
 
 // ListLiveStrategies godoc
@@ -104,13 +127,14 @@ func DeleteLiveStrategy(c *fiber.Ctx) error {
 }
 
 // GetLiveRealizedPnL godoc
-// @Summary      활성 전략의 누적 실현손익 + 청산 거래 리스트
-// @Description  exit_date 가 채워진 trade 만 집계. external_close 는 거래 리스트에 포함되지만 승/패·누적 손익에서는 제외됩니다.
+// @Summary      활성 전략의 누적 실현손익 + 청산 거래 리스트 (mode 별)
+// @Description  ?mode=paper / real 로 mode 지정.
 // @Tags         live
 // @Produce      json
-// @Success      200  {object}  map[string]interface{}
-// @Failure      500  {object}  map[string]string
+// @Param        mode  query     string  false  "paper | real (기본 paper)"
+// @Success      200   {object}  map[string]interface{}
+// @Failure      500   {object}  map[string]string
 // @Router       /live/realized-pnl [get]
 func GetLiveRealizedPnL(c *fiber.Ctx) error {
-	return proxy.Get(c, proxy.EngineBase+"/live/realized-pnl")
+	return proxy.Get(c, withMode(c, proxy.EngineBase+"/live/realized-pnl"))
 }

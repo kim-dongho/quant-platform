@@ -10,12 +10,14 @@ import { UNIVERSE_OPTIONS, getFactorLabel } from '@/entities/portfolio/model/fac
 import type { ExitPolicy } from '@/entities/portfolio/model/types';
 
 // 저장된 라이브 전략 라이브러리 모달 — 활성 1개 + 비활성 N개를 상세 정보까지 표시.
+// mode 는 prop 으로 받지만, 활성화는 전략 자체의 mode 따라 자동 분류 (다른 mode 의 활성 전략은 안 건드림).
 export const StrategyLibraryDialog = ({
   open,
   onClose,
 }: {
   open: boolean;
   onClose: () => void;
+  mode?: 'paper' | 'real';
 }) => {
   const { data: strategies, isLoading } = useLiveStrategies();
   const activate = useActivateLiveStrategy();

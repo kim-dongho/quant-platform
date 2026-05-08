@@ -1,6 +1,7 @@
 import { apiClient } from '@/shared/api/client';
 
 import type {
+  LiveMode,
   LiveRealizedPnL,
   LiveStrategy,
   LiveStrategyInput,
@@ -8,8 +9,17 @@ import type {
   UpsertResponse,
 } from '../model/types';
 
-export const fetchActiveLiveStrategy = async (): Promise<LiveStrategy | null> => {
-  const { data } = await apiClient.get<LiveStrategy | null>('/live/strategy');
+export const fetchActiveLiveStrategy = async (
+  mode: LiveMode = 'paper',
+): Promise<LiveStrategy | null> => {
+  const { data } = await apiClient.get<LiveStrategy | null>('/live/strategy', {
+    params: { mode },
+  });
+  return data;
+};
+
+export const fetchAllActiveLiveStrategies = async (): Promise<LiveStrategy[]> => {
+  const { data } = await apiClient.get<LiveStrategy[]>('/live/strategies/active');
   return data;
 };
 
@@ -18,14 +28,20 @@ export const upsertLiveStrategy = async (input: LiveStrategyInput): Promise<Upse
   return data;
 };
 
-export const stopLiveStrategy = async (): Promise<StopResponse> => {
-  const { data } = await apiClient.delete<StopResponse>('/live/strategy');
+export const stopLiveStrategy = async (mode: LiveMode = 'paper'): Promise<StopResponse> => {
+  const { data } = await apiClient.delete<StopResponse>('/live/strategy', {
+    params: { mode },
+  });
   return data;
 };
 
-export const updateLiveStrategySize = async (positionSizeKrw: number): Promise<LiveStrategy> => {
+export const updateLiveStrategySize = async (
+  positionSizeKrw: number,
+  mode: LiveMode = 'paper',
+): Promise<LiveStrategy> => {
   const { data } = await apiClient.patch<LiveStrategy>('/live/strategy', {
     position_size_krw: positionSizeKrw,
+    mode,
   });
   return data;
 };
@@ -45,7 +61,9 @@ export const deleteLiveStrategy = async (id: number): Promise<{ deleted: boolean
   return data;
 };
 
-export const fetchLiveRealizedPnL = async (): Promise<LiveRealizedPnL> => {
-  const { data } = await apiClient.get<LiveRealizedPnL>('/live/realized-pnl');
+export const fetchLiveRealizedPnL = async (mode: LiveMode = 'paper'): Promise<LiveRealizedPnL> => {
+  const { data } = await apiClient.get<LiveRealizedPnL>('/live/realized-pnl', {
+    params: { mode },
+  });
   return data;
 };

@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from src.service.live import (
     activate_strategy,
     delete_strategy,
+    get_active_strategies,
     get_active_strategy,
     get_realized_pnl_summary,
     list_strategies,
@@ -24,24 +25,35 @@ class UpdateSizeRequest(BaseModel):
     """활성 전략의 종목당 배분 금액만 patch 할 때 사용. 0 이하 → 자본 균등 분배."""
 
     position_size_krw: int
+    mode: str = "paper"  # 'paper' | 'real'
 
 
 router = APIRouter(prefix="/live", tags=["live"])
 
 
 @router.get("/strategy")
-def get_live_strategy():
-    """현재 활성화된 라이브 전략 1개를 반환. 없으면 null."""
+def get_live_strategy(mode: str = "paper"):
+    """지정 mode 의 활성 라이브 전략을 반환. 없으면 null."""
     try:
-        return get_active_strategy()
+        return get_active_strategy(mode=mode)
     except Exception as e:
         print(f"❌ get_live_strategy failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/strategies/active")
+def get_live_strategies_active():
+    """현재 활성 전략 모두 (paper / real, 최대 2개)."""
+    try:
+        return get_active_strategies()
+    except Exception as e:
+        print(f"❌ get_active_strategies failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/strategy")
 def upsert_live_strategy(req: LiveStrategyRequest):
-    """라이브 전략을 활성화. 기존 활성 전략이 있으면 자동으로 교체."""
+    """라이브 전략을 활성화. 같은 mode 의 기존 활성 전략이 있으면 교체."""
     try:
         payload = {
             "name": req.name,
@@ -60,9 +72,9 @@ def upsert_live_strategy(req: LiveStrategyRequest):
 
 @router.patch("/strategy")
 def patch_live_strategy(req: UpdateSizeRequest):
-    """활성 전략의 종목당 배분 금액만 수정 (룰·청산 정책은 그대로)."""
+    """지정 mode 활성 전략의 종목당 배분 금액만 수정 (룰·청산 정책 그대로)."""
     try:
-        return update_active_size(req.position_size_krw)
+        return update_active_size(req.position_size_krw, mode=req.mode)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -71,10 +83,10 @@ def patch_live_strategy(req: UpdateSizeRequest):
 
 
 @router.delete("/strategy")
-def delete_live_strategy():
-    """현재 활성 전략을 중지."""
+def delete_live_strategy(mode: str = "paper"):
+    """지정 mode 의 활성 전략 중지."""
     try:
-        return stop_active_strategy()
+        return stop_active_strategy(mode=mode)
     except Exception as e:
         print(f"❌ stop_live_strategy failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -103,13 +115,13 @@ def activate_live_strategy(strategy_id: int):
 
 
 @router.get("/realized-pnl")
-def get_live_realized_pnl():
-    """현재 활성 전략의 청산 완료 거래 누적 실현손익 + 거래 리스트.
+def get_live_realized_pnl(mode: str = "paper"):
+    """지정 mode 활성 전략의 청산 완료 거래 누적 실현손익 + 거래 리스트.
 
     활성 전략이 없으면 0으로 채워진 빈 응답을 반환.
     """
     try:
-        active = get_active_strategy()
+        active = get_active_strategy(mode=mode)
         if not active:
             return {
                 "total_pnl_krw": 0,

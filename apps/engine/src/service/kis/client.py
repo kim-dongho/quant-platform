@@ -42,13 +42,42 @@ def _normalize_krx_code(symbol: str) -> str:
     return code
 
 
+def _env_for_mode(mode: str, suffix: str, fallback_keys: tuple[str, ...] = ()) -> str:
+    """mode 별 env 우선, 없으면 fallback (구 통합 키) 사용.
+
+    예: mode='paper', suffix='APP_KEY' →
+        KIS_PAPER_APP_KEY 우선, 없으면 KIS_APP_KEY (구 키, 모드 호환 시).
+    """
+    primary = f"KIS_{mode.upper()}_{suffix}"
+    val = os.getenv(primary, "").strip()
+    if val:
+        return val
+    for fb in fallback_keys:
+        v = os.getenv(fb, "").strip()
+        if v:
+            return v
+    return ""
+
+
 class KisClient:
-    def __init__(self) -> None:
-        self.mode = (os.getenv("KIS_MODE") or "paper").strip().lower()
-        self.app_key = (os.getenv("KIS_APP_KEY") or "").strip()
-        self.app_secret = (os.getenv("KIS_APP_SECRET") or "").strip()
-        self.account_number = (os.getenv("KIS_ACCOUNT_NUMBER") or "").strip()
-        self.account_product = (os.getenv("KIS_ACCOUNT_PRODUCT_CODE") or "01").strip()
+    def __init__(self, mode: Optional[str] = None) -> None:
+        # mode 인자 > KIS_MODE env > 'paper' 기본
+        self.mode = (mode or os.getenv("KIS_MODE") or "paper").strip().lower()
+        if self.mode not in ("paper", "real"):
+            raise KisError(f"invalid mode: {self.mode}")
+
+        # 모드 별 키 우선 (KIS_PAPER_* / KIS_REAL_*), 없으면 구 통합 키 (KIS_APP_KEY 등)
+        # — 구 환경 호환 (모드 1개만 운영 중인 경우).
+        fallbacks = ("KIS_APP_KEY",) if self.mode == "paper" else ()
+        self.app_key = _env_for_mode(self.mode, "APP_KEY", ("KIS_APP_KEY",))
+        self.app_secret = _env_for_mode(self.mode, "APP_SECRET", ("KIS_APP_SECRET",))
+        self.account_number = _env_for_mode(
+            self.mode, "ACCOUNT_NUMBER", ("KIS_ACCOUNT_NUMBER",)
+        )
+        self.account_product = (
+            _env_for_mode(self.mode, "ACCOUNT_PRODUCT_CODE", ("KIS_ACCOUNT_PRODUCT_CODE",))
+            or "01"
+        )
 
         self.base_url = _REAL_BASE_URL if self.mode == "real" else _PAPER_BASE_URL
 
@@ -445,12 +474,13 @@ class KisClient:
         return self._retry_on_token_expired(_do)
 
 
-# 싱글톤 (env는 프로세스 수명 동안 고정이라 안전)
-_client: Optional[KisClient] = None
+# 모드별 싱글톤 — paper/real 두 인스턴스 동시 운영 가능. env 는 프로세스 수명 동안 고정.
+_clients: Dict[str, KisClient] = {}
 
 
-def get_kis_client() -> KisClient:
-    global _client
-    if _client is None:
-        _client = KisClient()
-    return _client
+def get_kis_client(mode: Optional[str] = None) -> KisClient:
+    """mode='paper' / 'real' 별 KisClient 인스턴스. mode 미지정 시 KIS_MODE env 사용 (구 동작)."""
+    resolved = (mode or os.getenv("KIS_MODE") or "paper").strip().lower()
+    if resolved not in _clients:
+        _clients[resolved] = KisClient(mode=resolved)
+    return _clients[resolved]

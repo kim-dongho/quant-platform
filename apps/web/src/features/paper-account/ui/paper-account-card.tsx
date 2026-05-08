@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { RealizedPnLDialog } from '@/features/live-realized-pnl/ui/realized-pnl-dialog';
 
 import { useLiveRealizedPnL } from '@/entities/live-strategy/api/live-strategy-queries';
-import type { LiveRealizedPnL } from '@/entities/live-strategy/model/types';
+import type { LiveMode, LiveRealizedPnL } from '@/entities/live-strategy/model/types';
 import { usePaperBalanceQuery } from '@/entities/paper/api/paper-queries';
 import type { PaperHolding } from '@/entities/paper/model/types';
 
@@ -20,9 +20,14 @@ const fmtPct = (v: number) => {
   return `${sign}${v.toFixed(2)}%`;
 };
 
-export const PaperAccountCard = () => {
-  const { data, isLoading, error } = usePaperBalanceQuery();
-  const { data: pnl } = useLiveRealizedPnL();
+interface Props {
+  /** paper / real — KIS 계좌 mode. 기본 paper. */
+  mode?: LiveMode;
+}
+
+export const PaperAccountCard = ({ mode = 'paper' }: Props = {}) => {
+  const { data, isLoading, error } = usePaperBalanceQuery({ mode });
+  const { data: pnl } = useLiveRealizedPnL(mode);
   const [pnlOpen, setPnlOpen] = useState(false);
 
   return (

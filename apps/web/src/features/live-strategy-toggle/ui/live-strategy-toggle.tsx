@@ -6,7 +6,7 @@ import {
   useActiveLiveStrategy,
   useStopLiveStrategy,
 } from '@/entities/live-strategy/api/live-strategy-queries';
-import type { LiveStrategy } from '@/entities/live-strategy/model/types';
+import type { LiveMode, LiveStrategy } from '@/entities/live-strategy/model/types';
 import { UNIVERSE_OPTIONS, getFactorLabel } from '@/entities/portfolio/model/factors';
 import type { ExitPolicy, RuleConfig } from '@/entities/portfolio/model/types';
 
@@ -16,23 +16,26 @@ interface Props {
   config: RuleConfig;
   exitPolicy: ExitPolicy | null;
   disabled?: boolean;
+  /** 어느 mode 의 활성 전략과 비교/교체할지. 기본 paper. */
+  mode?: LiveMode;
 }
 
 /**
- * /portfolio 헤더에 노출되는 라이브 활성화 토글.
+ * /portfolio 헤더에 노출되는 라이브 활성화 토글 (mode 별).
  *
  * 상태 3가지:
- *  - 활성 전략 없음                                → [⚡ 라이브 활성화]
+ *  - 활성 전략 없음                                → [⚡ 라이브 활성화 (mode)]
  *  - 활성 전략 있고 현재 config 와 동일            → [⏸ 라이브 중지 (전략명)]
  *  - 활성 전략 있고 현재 config 와 다름            → [⚡ 라이브 교체 (기존: 전략명)]
  */
-export const LiveStrategyToggle = ({ config, exitPolicy, disabled }: Props) => {
-  const { data: active } = useActiveLiveStrategy();
+export const LiveStrategyToggle = ({ config, exitPolicy, disabled, mode = 'paper' }: Props) => {
+  const { data: active } = useActiveLiveStrategy(mode);
   const stop = useStopLiveStrategy();
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const same = active ? isSameStrategy(active, config, exitPolicy) : false;
   const hasActive = !!active;
+  const modeLabel = mode === 'real' ? '실투자' : '모의';
 
   if (stop.isPending || stop.isSuccess === false) {
     // pending 표시는 버튼 아래에서 처리. isSuccess 가 false 인 상태는 에러일 수도.
@@ -42,13 +45,13 @@ export const LiveStrategyToggle = ({ config, exitPolicy, disabled }: Props) => {
     return (
       <button
         type="button"
-        onClick={() => stop.mutate()}
+        onClick={() => stop.mutate(active.mode)}
         disabled={stop.isPending}
         className="border-error/40 bg-error-container/40 text-error hover:bg-error-container/60 flex items-center gap-1.5 rounded-lg border px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-50"
-        title={`현재 이 전략이 라이브로 실행 중입니다 (id ${active.id})`}
+        title={`현재 이 전략이 ${modeLabel} 라이브로 실행 중입니다 (id ${active.id})`}
       >
         <span className="material-symbols-outlined text-[16px]">pause</span>
-        {stop.isPending ? '중지 중…' : `라이브 중지 (${active.name})`}
+        {stop.isPending ? '중지 중…' : `${modeLabel} 중지 (${active.name})`}
       </button>
     );
   }
@@ -63,16 +66,18 @@ export const LiveStrategyToggle = ({ config, exitPolicy, disabled }: Props) => {
           'flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold transition-all disabled:opacity-50',
           hasActive
             ? 'border-tertiary/50 bg-tertiary-container text-on-tertiary-container hover:bg-tertiary-container/80 border'
-            : 'border-outline-variant/60 bg-surface text-on-surface hover:bg-surface-container-low border',
+            : mode === 'real'
+              ? 'border-error/50 bg-error-container/40 text-error hover:bg-error-container/60 border'
+              : 'border-outline-variant/60 bg-surface text-on-surface hover:bg-surface-container-low border',
         ].join(' ')}
         title={
           hasActive
-            ? `현재 '${active.name}'이 실행 중. 활성화 시 자동 교체됩니다`
-            : '이 전략을 모의계좌에 활성화합니다'
+            ? `현재 '${active.name}'이 ${modeLabel} 실행 중. 활성화 시 자동 교체됩니다`
+            : `이 전략을 ${modeLabel} 라이브에 활성화합니다`
         }
       >
         <span className="material-symbols-outlined text-[16px]">bolt</span>
-        {hasActive ? `라이브 교체 (기존: ${active.name})` : '라이브 활성화'}
+        {hasActive ? `${modeLabel} 교체 (기존: ${active.name})` : `${modeLabel} 활성화`}
       </button>
       {dialogOpen && (
         <ActivateDialog
@@ -80,6 +85,7 @@ export const LiveStrategyToggle = ({ config, exitPolicy, disabled }: Props) => {
           exitPolicy={exitPolicy}
           existing={active ?? null}
           onClose={() => setDialogOpen(false)}
+          defaultMode={mode}
         />
       )}
     </>

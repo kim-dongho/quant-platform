@@ -1,5 +1,6 @@
 'use client';
 
+import type { LiveMode } from '@/entities/live-strategy/model/types';
 import { usePaperOrdersQuery } from '@/entities/paper/api/paper-queries';
 import type { OrderStatus, PaperOrder } from '@/entities/paper/model/types';
 
@@ -21,8 +22,13 @@ const fmtTime = (t?: string) => {
   return `${t.slice(0, 2)}:${t.slice(2, 4)}:${t.slice(4, 6)}`;
 };
 
-export const OrderHistory = () => {
-  const { data: orders = [], isLoading, error } = usePaperOrdersQuery();
+interface Props {
+  /** paper / real — KIS 계좌 mode. 기본 paper. */
+  mode?: LiveMode;
+}
+
+export const OrderHistory = ({ mode = 'paper' }: Props = {}) => {
+  const { data: orders = [], isLoading, error } = usePaperOrdersQuery({ mode });
 
   return (
     <div className="border-outline-variant/30 bg-surface-container-lowest flex flex-col gap-3 rounded-xl border p-5">

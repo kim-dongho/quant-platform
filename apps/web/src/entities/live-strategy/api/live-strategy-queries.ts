@@ -1,9 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import type { LiveMode } from '../model/types';
 import {
   activateLiveStrategy,
   deleteLiveStrategy,
   fetchActiveLiveStrategy,
+  fetchAllActiveLiveStrategies,
   fetchLiveRealizedPnL,
   fetchLiveStrategies,
   stopLiveStrategy,
@@ -13,15 +15,25 @@ import {
 
 export const liveStrategyKeys = {
   all: ['live-strategy'] as const,
-  active: () => [...liveStrategyKeys.all, 'active'] as const,
+  active: (mode: LiveMode = 'paper') => [...liveStrategyKeys.all, 'active', mode] as const,
+  activeAll: () => [...liveStrategyKeys.all, 'active', 'all'] as const,
   list: () => [...liveStrategyKeys.all, 'list'] as const,
-  realizedPnl: () => [...liveStrategyKeys.all, 'realized-pnl'] as const,
+  realizedPnl: (mode: LiveMode = 'paper') =>
+    [...liveStrategyKeys.all, 'realized-pnl', mode] as const,
 };
 
-export const useActiveLiveStrategy = () =>
+// mode 별 활성 전략 (paper / real 각각)
+export const useActiveLiveStrategy = (mode: LiveMode = 'paper') =>
   useQuery({
-    queryKey: liveStrategyKeys.active(),
-    queryFn: fetchActiveLiveStrategy,
+    queryKey: liveStrategyKeys.active(mode),
+    queryFn: () => fetchActiveLiveStrategy(mode),
+  });
+
+// 모든 활성 전략 (paper + real, 최대 2개)
+export const useAllActiveLiveStrategies = () =>
+  useQuery({
+    queryKey: liveStrategyKeys.activeAll(),
+    queryFn: fetchAllActiveLiveStrategies,
   });
 
 export const useLiveStrategies = () =>
@@ -41,7 +53,7 @@ export const useUpsertLiveStrategy = () => {
 export const useStopLiveStrategy = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: stopLiveStrategy,
+    mutationFn: (mode: LiveMode = 'paper') => stopLiveStrategy(mode),
     onSuccess: () => qc.invalidateQueries({ queryKey: liveStrategyKeys.all }),
   });
 };
@@ -65,13 +77,14 @@ export const useDeleteLiveStrategy = () => {
 export const useUpdateLiveStrategySize = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: updateLiveStrategySize,
+    mutationFn: ({ size, mode = 'paper' }: { size: number; mode?: LiveMode }) =>
+      updateLiveStrategySize(size, mode),
     onSuccess: () => qc.invalidateQueries({ queryKey: liveStrategyKeys.all }),
   });
 };
 
-export const useLiveRealizedPnL = () =>
+export const useLiveRealizedPnL = (mode: LiveMode = 'paper') =>
   useQuery({
-    queryKey: liveStrategyKeys.realizedPnl(),
-    queryFn: fetchLiveRealizedPnL,
+    queryKey: liveStrategyKeys.realizedPnl(mode),
+    queryFn: () => fetchLiveRealizedPnL(mode),
   });

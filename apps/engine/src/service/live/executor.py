@@ -209,31 +209,34 @@ def _evaluate_exits(
     return to_exit
 
 
-def run_once(dry_run: bool = False) -> dict[str, Any]:
-    """라이브 매매 1회 실행. cron이 호출."""
-    print(f"🤖 Live executor start (dry_run={dry_run})")
+def run_once(dry_run: bool = False, mode: str = "paper") -> dict[str, Any]:
+    """라이브 매매 1회 실행 (지정 mode). cron 이 mode 별로 호출.
 
-    strategy = get_active_strategy()
+    mode='paper' or 'real' — 두 모드는 KIS 키·계좌가 다르므로 별도 KisClient 사용.
+    """
+    print(f"🤖 Live executor start (mode={mode}, dry_run={dry_run})")
+
+    strategy = get_active_strategy(mode=mode)
     if not strategy:
-        print("⚠️  활성 전략 없음 — 종료")
-        return {"status": "no_strategy"}
+        print(f"⚠️  활성 {mode} 전략 없음 — 종료")
+        return {"status": "no_strategy", "mode": mode}
 
     print(
-        f"📋 Strategy: {strategy['name']} "
+        f"📋 Strategy ({mode}): {strategy['name']} "
         f"(universe={strategy['universe']}, max_positions={strategy['max_positions']})"
     )
 
     if not dry_run:
-        notify_slack(f"🕗 *{strategy['name']}* 매매 사이클 시작")
+        notify_slack(f"🕗 *{strategy['name']}* [{mode}] 매매 사이클 시작")
 
-    kis = get_kis_client()
+    kis = get_kis_client(mode=mode)
     try:
         balance = kis.get_balance()
     except KisError as e:
         print(f"❌ KIS balance failed: {e}")
         if not dry_run:
-            notify_slack(f"❌ *{strategy['name']}* — KIS 잔고 조회 실패\n```{e}```")
-        return {"status": "kis_error", "error": str(e)}
+            notify_slack(f"❌ *{strategy['name']}* [{mode}] — KIS 잔고 조회 실패\n```{e}```")
+        return {"status": "kis_error", "error": str(e), "mode": mode}
 
     holdings: list[dict[str, Any]] = balance.get("holdings") or []
     summary = balance.get("summary") or {}
@@ -294,7 +297,7 @@ def run_once(dry_run: bool = False) -> dict[str, Any]:
 
     if open_slots <= 0:
         print(f"📊 빈 슬롯 없음 (보유 {len(held_codes)}/{strategy['max_positions']}) — 매수 스킵")
-        return {"status": "ok", "sells": sells, "buys": []}
+        return {"status": "ok", "sells": sells, "buys": [], "mode": mode}
 
     print(f"🔍 빈 슬롯 {open_slots}개 — screen 실행")
     # 갭 필터로 일부 후보가 제외될 것을 감안해 max_positions * 3 만큼 후보 요청.
@@ -310,8 +313,8 @@ def run_once(dry_run: bool = False) -> dict[str, Any]:
     except Exception as e:
         print(f"❌ screen failed: {e}")
         if not dry_run:
-            notify_slack(f"❌ *{strategy['name']}* — screen 실패\n```{e}```")
-        return {"status": "screen_error", "error": str(e), "sells": sells, "buys": []}
+            notify_slack(f"❌ *{strategy['name']}* [{mode}] — screen 실패\n```{e}```")
+        return {"status": "screen_error", "error": str(e), "sells": sells, "buys": [], "mode": mode}
 
     # 보유 + 방금 매도한 종목 모두 후보 제외 (sell→buy 한 라운드 왕복 방지).
     excluded_codes = held_codes | sold_codes
@@ -418,11 +421,26 @@ def run_once(dry_run: bool = False) -> dict[str, Any]:
         more_sells = f"\n  …외 {len(sells) - 5}건" if len(sells) > 5 else ""
         more_buys = f"\n  …외 {len(buys) - 5}건" if len(buys) > 5 else ""
         notify_slack(
-            f"🤖 *{strategy['name']}* 매매 완료\n"
+            f"🤖 *{strategy['name']}* [{mode}] 매매 완료\n"
             f"매도 {len(sells)} | 매수 {len(buys)} | 매수가능 ₩{cash:,.0f}\n"
             f"매도 사유: {reason_str}\n"
             f"*매도 종목*\n{sell_lines}{more_sells}\n"
             f"*매수 종목*\n{buy_lines}{more_buys}"
         )
 
-    return {"status": "ok", "sells": sells, "buys": buys}
+    return {"status": "ok", "sells": sells, "buys": buys, "mode": mode}
+
+
+def run_once_all(dry_run: bool = False) -> dict[str, Any]:
+    """활성화된 paper / real 모두 순차 실행. cron 단일 호출로 양쪽 처리.
+
+    한쪽 mode 가 실패해도 다른쪽은 계속 진행.
+    """
+    results: dict[str, Any] = {}
+    for mode in ("paper", "real"):
+        try:
+            results[mode] = run_once(dry_run=dry_run, mode=mode)
+        except Exception as e:
+            print(f"❌ run_once[{mode}] 예외: {e}")
+            results[mode] = {"status": "exception", "error": str(e), "mode": mode}
+    return results

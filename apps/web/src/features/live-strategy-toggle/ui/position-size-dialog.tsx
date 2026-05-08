@@ -3,13 +3,14 @@
 import { useEffect, useState } from 'react';
 
 import { useUpdateLiveStrategySize } from '@/entities/live-strategy/api/live-strategy-queries';
-import type { LiveStrategy } from '@/entities/live-strategy/model/types';
+import type { LiveMode, LiveStrategy } from '@/entities/live-strategy/model/types';
 
 import { NumberInput } from '@/shared/ui/number-input';
 
 interface Props {
   strategy: LiveStrategy;
   onClose: () => void;
+  mode?: LiveMode;
 }
 
 type SizeMode = 'fixed' | 'equal_weight';
@@ -17,7 +18,7 @@ type SizeMode = 'fixed' | 'equal_weight';
 const DEFAULT_FIXED = 1_000_000;
 
 // 활성 전략의 종목당 배분 금액만 수정. 룰·청산은 그대로 두고 PATCH /live/strategy 로 같은 row 업데이트.
-export const PositionSizeDialog = ({ strategy, onClose }: Props) => {
+export const PositionSizeDialog = ({ strategy, onClose, mode = 'paper' }: Props) => {
   const update = useUpdateLiveStrategySize();
   const [sizeMode, setSizeMode] = useState<SizeMode>(
     strategy.position_size_krw > 0 ? 'fixed' : 'equal_weight',
@@ -41,10 +42,13 @@ export const PositionSizeDialog = ({ strategy, onClose }: Props) => {
       setError('종목당 배분 금액은 최소 10,000원 이상이어야 합니다');
       return;
     }
-    update.mutate(sizeMode === 'fixed' ? positionSize : 0, {
-      onSuccess: () => onClose(),
-      onError: (e) => setError(e instanceof Error ? e.message : '저장 실패'),
-    });
+    update.mutate(
+      { size: sizeMode === 'fixed' ? positionSize : 0, mode },
+      {
+        onSuccess: () => onClose(),
+        onError: (e) => setError(e instanceof Error ? e.message : '저장 실패'),
+      },
+    );
   };
 
   return (

@@ -6,7 +6,7 @@ import {
   useActiveLiveStrategy,
   useStopLiveStrategy,
 } from '@/entities/live-strategy/api/live-strategy-queries';
-import type { LiveStrategy } from '@/entities/live-strategy/model/types';
+import type { LiveMode, LiveStrategy } from '@/entities/live-strategy/model/types';
 import { UNIVERSE_OPTIONS, getFactorLabel } from '@/entities/portfolio/model/factors';
 import type { ExitPolicy } from '@/entities/portfolio/model/types';
 
@@ -17,10 +17,16 @@ interface ActiveStrategyCardProps {
   onOpenLibrary?: () => void;
   /** 활성 전략의 종목당 배분만 빠르게 수정. 위젯 쪽에서 모달 토글. */
   onOpenSize?: () => void;
+  /** paper / real — 모드 별 활성 전략. 기본 paper. */
+  mode?: LiveMode;
 }
 
-export const ActiveStrategyCard = ({ onOpenLibrary, onOpenSize }: ActiveStrategyCardProps = {}) => {
-  const { data: strategy, isLoading } = useActiveLiveStrategy();
+export const ActiveStrategyCard = ({
+  onOpenLibrary,
+  onOpenSize,
+  mode = 'paper',
+}: ActiveStrategyCardProps = {}) => {
+  const { data: strategy, isLoading } = useActiveLiveStrategy(mode);
   const stop = useStopLiveStrategy();
   const confirm = useConfirm();
 
@@ -29,19 +35,19 @@ export const ActiveStrategyCard = ({ onOpenLibrary, onOpenSize }: ActiveStrategy
   }
 
   if (!strategy) {
-    return <EmptyCard onOpenLibrary={onOpenLibrary} />;
+    return <EmptyCard onOpenLibrary={onOpenLibrary} mode={mode} />;
   }
 
   const handleStop = async () => {
     const ok = await confirm({
-      title: `'${strategy.name}' 전략을 중지합니다`,
+      title: `'${strategy.name}' [${mode === 'real' ? '실투자' : '모의투자'}] 전략을 중지합니다`,
       description: '중지 후에도 언제든 전략 페이지에서 다시 활성화할 수 있습니다.',
       tone: 'danger',
       confirmText: '중지',
       cancelText: '취소',
       icon: 'pause',
     });
-    if (ok) stop.mutate();
+    if (ok) stop.mutate(mode);
   };
 
   return (
@@ -66,12 +72,14 @@ const SkeletonCard = () => (
   </div>
 );
 
-const EmptyCard = ({ onOpenLibrary }: { onOpenLibrary?: () => void }) => (
+const EmptyCard = ({ onOpenLibrary, mode }: { onOpenLibrary?: () => void; mode?: LiveMode }) => (
   <div className="border-outline-variant/40 bg-surface-container-lowest flex items-center justify-between gap-4 rounded-xl border px-4 py-3">
     <div className="flex items-center gap-3">
       <span className="material-symbols-outlined text-on-surface-variant text-[20px]">bolt</span>
       <div>
-        <div className="text-on-surface text-sm font-semibold">활성 전략이 없습니다</div>
+        <div className="text-on-surface text-sm font-semibold">
+          활성 {mode === 'real' ? '실투자' : '모의투자'} 전략이 없습니다
+        </div>
         <div className="text-on-surface-variant mt-0.5 text-xs">
           전략 페이지에서 만든 룰을 라이브로 활성화하거나, 저장된 전략을 불러오세요
         </div>

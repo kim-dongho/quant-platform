@@ -1,9 +1,10 @@
 """라이브 자동매매 도메인 — 활성 전략·trade 로그·executor."""
 
-from src.service.live.executor import run_once
+from src.service.live.executor import run_once, run_once_all
 from src.service.live.strategy import (
     activate_strategy,
     delete_strategy,
+    get_active_strategies,
     get_active_strategy,
     list_strategies,
     stop_active_strategy,
@@ -22,7 +23,9 @@ from src.service.live.trades import (
 
 __all__ = [
     "run_once",
+    "run_once_all",
     "get_active_strategy",
+    "get_active_strategies",
     "list_strategies",
     "upsert_active_strategy",
     "activate_strategy",

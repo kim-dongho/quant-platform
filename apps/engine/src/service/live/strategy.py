@@ -1,8 +1,8 @@
 """라이브 전략 저장/조회/중지 서비스.
 
-MVP 제약
-- 활성 전략은 동시에 1개만 허용 (partial unique index 로 DB 레벨 강제).
-- POST 는 트랜잭션 내에서 기존 활성 전략을 자동 비활성화 후 새 전략을 활성 상태로 INSERT.
+제약
+- 활성 전략은 mode 당 1개씩 (paper 1 + real 1 동시 운영 가능).
+- POST 는 트랜잭션 내에서 같은 mode 의 기존 활성 전략을 비활성화 후 새 전략 INSERT.
 - 이 단계에서는 주문 발사/스케줄링 없음. 단순 상태 저장소.
 
 Hysteresis 자동 도출
@@ -21,11 +21,19 @@ from src.core.database import engine
 from src.service.live.hysteresis import derive_signal_exit_clauses
 
 
+_VALID_MODES = ("paper", "real")
+
+
+def _validate_mode(mode: str) -> str:
+    m = (mode or "").strip().lower()
+    if m not in _VALID_MODES:
+        raise ValueError(f"mode must be 'paper' or 'real', got '{mode}'")
+    return m
+
+
 def _row_to_dict(row) -> dict[str, Any]:
     """SQLAlchemy Row → JSON 직렬화 가능한 dict."""
     d = dict(row._mapping)
-    # JSONB 컬럼은 드라이버가 이미 dict/list 로 반환하므로 그대로 사용.
-    # datetime 은 FastAPI 가 ISO 직렬화하지만, 통일성 위해 isoformat 적용.
     for k in ("last_rebalance_at", "created_at", "updated_at"):
         v = d.get(k)
         if v is not None and hasattr(v, "isoformat"):
@@ -33,8 +41,9 @@ def _row_to_dict(row) -> dict[str, Any]:
     return d
 
 
-def get_active_strategy() -> dict[str, Any] | None:
-    """현재 활성화된 라이브 전략을 반환. 없으면 None."""
+def get_active_strategy(mode: str = "paper") -> dict[str, Any] | None:
+    """지정 mode 의 활성 라이브 전략. 없으면 None."""
+    m = _validate_mode(mode)
     with engine.connect() as conn:
         row = conn.execute(
             text(
@@ -43,27 +52,44 @@ def get_active_strategy() -> dict[str, Any] | None:
                        is_active, mode, position_size_krw, last_rebalance_at,
                        created_at, updated_at
                 FROM live_strategies
-                WHERE is_active
+                WHERE is_active AND mode = :mode
                 LIMIT 1
                 """
-            )
+            ),
+            {"mode": m},
         ).fetchone()
     return _row_to_dict(row) if row else None
 
 
+def get_active_strategies() -> list[dict[str, Any]]:
+    """현재 활성 전략 모두 (mode 별 0~1 개씩, 최대 2개)."""
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                """
+                SELECT id, name, universe, clauses, max_positions, exit_policy,
+                       is_active, mode, position_size_krw, last_rebalance_at,
+                       created_at, updated_at
+                FROM live_strategies
+                WHERE is_active
+                ORDER BY mode
+                """
+            )
+        ).fetchall()
+    return [_row_to_dict(r) for r in rows]
+
+
 def upsert_active_strategy(payload: dict[str, Any]) -> dict[str, Any]:
-    """활성 전략을 교체(또는 신규 활성화).
+    """지정 mode 의 활성 전략을 교체(또는 신규 활성화).
 
-    기존 활성 전략이 있으면 is_active=false 로 내리고, 새 row 를 is_active=true 로 INSERT.
-    트랜잭션으로 묶어 partial unique index 충돌을 방지한다.
-
-    Returns: 새로 활성화된 전략 dict (기존 교체된 전략 정보는 `replaced` 키에 포함).
+    같은 mode 의 기존 활성 전략을 is_active=false 로 내리고, 새 row 를 INSERT.
+    트랜잭션으로 묶어 mode 별 partial unique index 충돌 방지.
+    다른 mode 의 활성 전략은 영향 없음.
     """
+    mode = _validate_mode(payload.get("mode", "paper"))
     clauses = payload["clauses"]
     clauses_json = json.dumps(clauses)
 
-    # Hysteresis — exit_policy.signal_exit_clauses 가 비어 있으면 진입 룰에서 자동 도출.
-    # 사용자가 명시적으로 작성한 게 있으면 그대로 둠.
     exit_policy = dict(payload.get("exit_policy") or {})
     if not exit_policy.get("signal_exit_clauses") and clauses:
         exit_policy["signal_exit_clauses"] = derive_signal_exit_clauses(clauses)
@@ -75,10 +101,11 @@ def upsert_active_strategy(payload: dict[str, Any]) -> dict[str, Any]:
                 """
                 UPDATE live_strategies
                 SET is_active = false, updated_at = now()
-                WHERE is_active
+                WHERE is_active AND mode = :mode
                 RETURNING id, name
                 """
-            )
+            ),
+            {"mode": mode},
         ).fetchone()
 
         new_row = conn.execute(
@@ -103,7 +130,7 @@ def upsert_active_strategy(payload: dict[str, Any]) -> dict[str, Any]:
                 "clauses": clauses_json,
                 "max_positions": payload.get("max_positions", 10),
                 "exit_policy": exit_policy_json,
-                "mode": payload.get("mode", "paper"),
+                "mode": mode,
                 "size": payload.get("position_size_krw", 1_000_000),
             },
         ).fetchone()
@@ -116,7 +143,7 @@ def upsert_active_strategy(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def list_strategies() -> list[dict[str, Any]]:
-    """저장된 모든 라이브 전략을 최근 활성화·수정 순으로 반환 (활성 1개 + 비활성 N개)."""
+    """저장된 모든 라이브 전략을 mode → is_active → updated_at 순으로 반환."""
     with engine.connect() as conn:
         rows = conn.execute(
             text(
@@ -125,7 +152,7 @@ def list_strategies() -> list[dict[str, Any]]:
                        is_active, mode, position_size_krw, last_rebalance_at,
                        created_at, updated_at
                 FROM live_strategies
-                ORDER BY is_active DESC, updated_at DESC
+                ORDER BY mode, is_active DESC, updated_at DESC
                 """
             )
         ).fetchall()
@@ -133,28 +160,26 @@ def list_strategies() -> list[dict[str, Any]]:
 
 
 def activate_strategy(strategy_id: int) -> dict[str, Any]:
-    """지정한 전략을 활성화. 기존 활성 전략은 자동으로 비활성화.
-
-    Returns: 새로 활성화된 전략 dict (`replaced` 키에 교체된 전략 정보).
-    """
+    """지정 전략 활성화. 같은 mode 의 다른 활성 전략은 자동 비활성화 (다른 mode 는 그대로)."""
     with engine.begin() as conn:
         target = conn.execute(
-            text("SELECT id, name FROM live_strategies WHERE id = :id"),
+            text("SELECT id, name, mode FROM live_strategies WHERE id = :id"),
             {"id": strategy_id},
         ).fetchone()
         if target is None:
             raise ValueError(f"strategy id={strategy_id} not found")
+        mode = target.mode
 
         replaced = conn.execute(
             text(
                 """
                 UPDATE live_strategies
                 SET is_active = false, updated_at = now()
-                WHERE is_active AND id != :id
+                WHERE is_active AND mode = :mode AND id != :id
                 RETURNING id, name
                 """
             ),
-            {"id": strategy_id},
+            {"id": strategy_id, "mode": mode},
         ).fetchone()
 
         new_row = conn.execute(
@@ -179,7 +204,7 @@ def activate_strategy(strategy_id: int) -> dict[str, Any]:
 
 
 def delete_strategy(strategy_id: int) -> dict[str, Any]:
-    """비활성 전략을 삭제. 활성 전략은 삭제 거부 (먼저 다른 전략 활성화하거나 stop 후)."""
+    """비활성 전략 삭제. 활성 전략은 거부 (먼저 stop 또는 다른 전략 활성화 후)."""
     with engine.begin() as conn:
         target = conn.execute(
             text("SELECT id, name, is_active FROM live_strategies WHERE id = :id"),
@@ -197,44 +222,44 @@ def delete_strategy(strategy_id: int) -> dict[str, Any]:
     return {"deleted": True, "id": target.id, "name": target.name}
 
 
-def update_active_size(position_size_krw: int) -> dict[str, Any]:
-    """활성 전략의 종목당 배분 금액만 수정. 새 row 안 만들고 같은 row UPDATE.
-
-    position_size_krw <= 0 → 자본 균등 분배 모드 (executor 가 잔고 ÷ 슬롯 동적 계산).
-    """
+def update_active_size(position_size_krw: int, mode: str = "paper") -> dict[str, Any]:
+    """지정 mode 활성 전략의 종목당 배분 금액만 수정."""
+    m = _validate_mode(mode)
     with engine.begin() as conn:
         row = conn.execute(
             text(
                 """
                 UPDATE live_strategies
                 SET position_size_krw = :size, updated_at = now()
-                WHERE is_active
+                WHERE is_active AND mode = :mode
                 RETURNING id, name, universe, clauses, max_positions, exit_policy,
                           is_active, mode, position_size_krw, last_rebalance_at,
                           created_at, updated_at
                 """
             ),
-            {"size": int(position_size_krw)},
+            {"size": int(position_size_krw), "mode": m},
         ).fetchone()
     if row is None:
-        raise ValueError("활성 전략이 없습니다")
+        raise ValueError(f"활성 {m} 전략이 없습니다")
     return _row_to_dict(row)
 
 
-def stop_active_strategy() -> dict[str, Any]:
-    """현재 활성 전략을 비활성화. 활성 전략이 없으면 stopped=false 반환."""
+def stop_active_strategy(mode: str = "paper") -> dict[str, Any]:
+    """지정 mode 활성 전략 비활성화. 없으면 stopped=False."""
+    m = _validate_mode(mode)
     with engine.begin() as conn:
         row = conn.execute(
             text(
                 """
                 UPDATE live_strategies
                 SET is_active = false, updated_at = now()
-                WHERE is_active
+                WHERE is_active AND mode = :mode
                 RETURNING id, name
                 """
-            )
+            ),
+            {"mode": m},
         ).fetchone()
 
     if row is None:
-        return {"stopped": False}
-    return {"stopped": True, "id": row.id, "name": row.name}
+        return {"stopped": False, "mode": m}
+    return {"stopped": True, "id": row.id, "name": row.name, "mode": m}

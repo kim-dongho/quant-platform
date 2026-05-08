@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { useUpsertLiveStrategy } from '@/entities/live-strategy/api/live-strategy-queries';
-import type { LiveStrategy } from '@/entities/live-strategy/model/types';
+import type { LiveMode, LiveStrategy } from '@/entities/live-strategy/model/types';
 import type { ExitPolicy, RuleConfig } from '@/entities/portfolio/model/types';
 
 import { useAlert } from '@/shared/ui/dialog/dialog-provider';
@@ -16,6 +16,8 @@ interface Props {
   exitPolicy: ExitPolicy | null;
   existing: LiveStrategy | null;
   onClose: () => void;
+  /** 기본 선택 모드 (워크벤치 탭에서 전달). 없으면 existing 의 mode 또는 paper. */
+  defaultMode?: LiveMode;
 }
 
 const DEFAULT_NAME = '기본 전략';
@@ -23,8 +25,9 @@ const DEFAULT_POSITION_SIZE = 1_000_000;
 
 type SizeMode = 'fixed' | 'equal_weight';
 
-export const ActivateDialog = ({ config, exitPolicy, existing, onClose }: Props) => {
+export const ActivateDialog = ({ config, exitPolicy, existing, onClose, defaultMode }: Props) => {
   const [name, setName] = useState(existing?.name || DEFAULT_NAME);
+  const [mode, setMode] = useState<LiveMode>(defaultMode || existing?.mode || 'paper');
   // 기존 전략의 position_size_krw <= 0 이면 자본 균등 분배 모드.
   const [sizeMode, setSizeMode] = useState<SizeMode>(() =>
     (existing?.position_size_krw ?? 1) > 0 ? 'fixed' : 'equal_weight',
@@ -65,16 +68,19 @@ export const ActivateDialog = ({ config, exitPolicy, existing, onClose }: Props)
         exit_policy: exitPolicy,
         // 자본 균등 분배 모드는 0 으로 전송. executor 가 잔고 ÷ 슬롯 동적 계산.
         position_size_krw: sizeMode === 'fixed' ? positionSize : 0,
+        mode,
       },
       {
         onSuccess: (data) => {
           onClose();
           void alert({
             title: data.replaced
-              ? `'${data.replaced.name}' 중지 → '${data.name}' 활성화됨`
-              : `'${data.name}' 이 활성화되었습니다`,
+              ? `'${data.replaced.name}' 중지 → '${data.name}' [${mode === 'real' ? '실투자' : '모의투자'}] 활성화됨`
+              : `'${data.name}' [${mode === 'real' ? '실투자' : '모의투자'}] 활성화됨`,
             description:
-              '이 전략은 현재 상태 저장소에 기록되었습니다. 자동 매매 파이프라인은 다음 단계에서 추가됩니다.',
+              mode === 'real'
+                ? '⚠️ 실투자 모드 — 실제 자금이 사용됩니다. 다음 cron 사이클부터 KIS 실전 계좌에서 매매가 발생합니다.'
+                : '이 전략은 현재 상태 저장소에 기록되었습니다. 다음 cron 사이클에서 모의 매매가 발생합니다.',
             icon: 'bolt',
           });
         },
@@ -117,6 +123,39 @@ export const ActivateDialog = ({ config, exitPolicy, existing, onClose }: Props)
 
         {/* Body */}
         <div className="flex flex-col gap-4 px-6 pb-6">
+          <div>
+            <label className="text-on-surface-variant mb-1.5 block text-xs font-medium">
+              실행 모드
+            </label>
+            <div className="mb-2 flex gap-1">
+              <button
+                type="button"
+                onClick={() => setMode('paper')}
+                className={`flex-1 rounded-md border px-3 py-2 text-xs font-medium transition-colors ${
+                  mode === 'paper'
+                    ? 'border-primary bg-primary text-on-primary'
+                    : 'border-outline-variant/60 bg-surface text-on-surface-variant hover:bg-surface-container-low'
+                }`}
+              >
+                모의투자 (가상자금)
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode('real')}
+                className={`flex-1 rounded-md border px-3 py-2 text-xs font-medium transition-colors ${
+                  mode === 'real'
+                    ? 'border-error bg-error text-on-error'
+                    : 'border-outline-variant/60 bg-surface text-on-surface-variant hover:bg-surface-container-low'
+                }`}
+              >
+                실투자 (실제자금) ⚠️
+              </button>
+            </div>
+            <p className="text-on-surface-variant text-[11px]">
+              모의 / 실투자 각각 독립적으로 운영 가능. 같은 mode 의 기존 활성 전략은 자동 교체됨.
+            </p>
+          </div>
+
           <div>
             <label className="text-on-surface-variant mb-1.5 block text-xs font-medium">
               전략명

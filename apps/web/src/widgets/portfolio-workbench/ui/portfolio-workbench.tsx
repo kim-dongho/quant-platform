@@ -11,9 +11,16 @@ import { DiscoverDialog } from '@/features/strategy-discover/ui/discover-dialog'
 import { PageHeader } from '@/shared/ui/page-header';
 
 import { usePortfolioState } from '../model/use-portfolio-state';
+import { PortfolioModeTab } from './portfolio-mode-tab';
 
 export const PortfolioWorkbench = () => {
   const {
+    mode,
+    setMode,
+    paperActive,
+    realActive,
+    activePaperName,
+    activeRealName,
     config,
     setConfig,
     exitPolicy,
@@ -27,14 +34,18 @@ export const PortfolioWorkbench = () => {
     runSimulation,
     resetAll,
     applyDiscoveredClauses,
+    copyFromOtherMode,
   } = usePortfolioState();
+
+  const otherHasStrategy = mode === 'paper' ? realActive : paperActive;
+  const otherLabel = mode === 'paper' ? '실투자' : '모의투자';
 
   return (
     <div className="bg-background flex h-full flex-1 flex-col overflow-hidden">
       <PageHeader
         leading={<span className="material-symbols-outlined text-primary text-[24px]">rule</span>}
         title="전략"
-        subtitle="매매 조건을 만들어 과거 데이터로 이 규칙이 얼마나 벌었을지 시뮬레이션합니다"
+        subtitle="모의·실투자 각각 다른 룰을 만들어 비교하거나 동시 운영합니다"
         actions={
           <>
             <button
@@ -57,9 +68,23 @@ export const PortfolioWorkbench = () => {
               <span className="material-symbols-outlined text-[16px]">play_arrow</span>
               {isRunning ? '실행 중…' : '시뮬레이션 실행'}
             </button>
-            <LiveStrategyToggle config={config} exitPolicy={exitPolicy} disabled={isRunning} />
+            <LiveStrategyToggle
+              config={config}
+              exitPolicy={exitPolicy}
+              disabled={isRunning}
+              mode={mode}
+            />
           </>
         }
+      />
+
+      <PortfolioModeTab
+        value={mode}
+        onChange={setMode}
+        paperActive={paperActive}
+        realActive={realActive}
+        paperName={activePaperName}
+        realName={activeRealName}
       />
 
       {anyError && (
@@ -68,9 +93,19 @@ export const PortfolioWorkbench = () => {
         </div>
       )}
 
-      {/* 본문: 좌(전략 규칙 고정) + 우(차트·지표·추천 세로 스크롤) */}
-      <div className="flex flex-1 gap-4 overflow-hidden p-6">
-        <aside className="flex w-[340px] shrink-0 flex-col">
+      <div className="flex flex-1 gap-4 overflow-hidden p-6 pt-4">
+        <aside className="flex w-[340px] shrink-0 flex-col gap-3">
+          {otherHasStrategy && (
+            <button
+              type="button"
+              onClick={copyFromOtherMode}
+              className="border-outline-variant/50 bg-surface-container-low text-on-surface hover:bg-surface-container flex items-center justify-center gap-1.5 rounded-lg border border-dashed px-3 py-1.5 text-[11.5px] font-medium transition-colors"
+              title={`${otherLabel} 의 활성 룰을 현재 편집기로 복사`}
+            >
+              <span className="material-symbols-outlined text-[14px]">content_copy</span>
+              {otherLabel} 룰에서 복사
+            </button>
+          )}
           <RuleBuilder
             config={config}
             onChange={setConfig}

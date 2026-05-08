@@ -1,5 +1,7 @@
 import type { Clause, ExitPolicy } from '@/entities/portfolio/model/types';
 
+export type LiveMode = 'paper' | 'real';
+
 export interface LiveStrategy {
   id: number;
   name: string;
@@ -8,7 +10,7 @@ export interface LiveStrategy {
   max_positions: number;
   exit_policy: ExitPolicy | null;
   is_active: boolean;
-  mode: 'paper';
+  mode: LiveMode;
   position_size_krw: number;
   last_rebalance_at: string | null;
   created_at: string;
@@ -22,6 +24,7 @@ export interface LiveStrategyInput {
   max_positions: number;
   exit_policy: ExitPolicy | null;
   position_size_krw: number;
+  mode?: LiveMode;
 }
 
 export interface UpsertResponse extends LiveStrategy {
@@ -32,6 +35,7 @@ export interface StopResponse {
   stopped: boolean;
   id?: number;
   name?: string;
+  mode?: LiveMode;
 }
 
 export interface LiveClosedTrade {
