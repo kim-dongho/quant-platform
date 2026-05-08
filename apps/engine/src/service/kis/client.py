@@ -43,21 +43,9 @@ def _normalize_krx_code(symbol: str) -> str:
     return code
 
 
-def _env_for_mode(mode: str, suffix: str, fallback_keys: tuple[str, ...] = ()) -> str:
-    """mode 별 env 우선, 없으면 fallback (구 통합 키) 사용.
-
-    예: mode='paper', suffix='APP_KEY' →
-        KIS_PAPER_APP_KEY 우선, 없으면 KIS_APP_KEY (구 키, 모드 호환 시).
-    """
-    primary = f"KIS_{mode.upper()}_{suffix}"
-    val = os.getenv(primary, "").strip()
-    if val:
-        return val
-    for fb in fallback_keys:
-        v = os.getenv(fb, "").strip()
-        if v:
-            return v
-    return ""
+def _env_for_mode(mode: str, suffix: str) -> str:
+    """KIS_<MODE>_<SUFFIX> env 조회. 없으면 빈 문자열."""
+    return os.getenv(f"KIS_{mode.upper()}_{suffix}", "").strip()
 
 
 class KisClient:
@@ -67,24 +55,11 @@ class KisClient:
         if self.mode not in ("paper", "real"):
             raise KisError(f"invalid mode: {self.mode}")
 
-        # 모드 별 키 우선 (KIS_PAPER_* / KIS_REAL_*), paper 만 구 통합 키 (KIS_APP_KEY 등) fallback.
-        # — 구 환경은 모의투자 단일 운영이었으므로 real 모드는 fallback 금지.
-        legacy = self.mode == "paper"
-        self.app_key = _env_for_mode(self.mode, "APP_KEY", ("KIS_APP_KEY",) if legacy else ())
-        self.app_secret = _env_for_mode(
-            self.mode, "APP_SECRET", ("KIS_APP_SECRET",) if legacy else ()
-        )
-        self.account_number = _env_for_mode(
-            self.mode, "ACCOUNT_NUMBER", ("KIS_ACCOUNT_NUMBER",) if legacy else ()
-        )
-        self.account_product = (
-            _env_for_mode(
-                self.mode,
-                "ACCOUNT_PRODUCT_CODE",
-                ("KIS_ACCOUNT_PRODUCT_CODE",) if legacy else (),
-            )
-            or "01"
-        )
+        # 모드 별 키만 사용 (KIS_PAPER_* / KIS_REAL_*).
+        self.app_key = _env_for_mode(self.mode, "APP_KEY")
+        self.app_secret = _env_for_mode(self.mode, "APP_SECRET")
+        self.account_number = _env_for_mode(self.mode, "ACCOUNT_NUMBER")
+        self.account_product = _env_for_mode(self.mode, "ACCOUNT_PRODUCT_CODE") or "01"
 
         self.base_url = _REAL_BASE_URL if self.mode == "real" else _PAPER_BASE_URL
 
@@ -155,17 +130,18 @@ class KisClient:
     # Auth
     # ---------------------------------------------------------------------
     def _assert_configured(self) -> None:
+        prefix = f"KIS_{self.mode.upper()}_"
         missing = [
-            name
-            for name, val in (
-                ("KIS_APP_KEY", self.app_key),
-                ("KIS_APP_SECRET", self.app_secret),
-                ("KIS_ACCOUNT_NUMBER", self.account_number),
+            f"{prefix}{suffix}"
+            for suffix, val in (
+                ("APP_KEY", self.app_key),
+                ("APP_SECRET", self.app_secret),
+                ("ACCOUNT_NUMBER", self.account_number),
             )
             if not val
         ]
         if missing:
-            raise KisError(f"KIS credentials missing: {', '.join(missing)}")
+            raise KisError(f"KIS credentials missing ({self.mode}): {', '.join(missing)}")
 
     def _issue_token(self) -> str:
         resp = requests.post(

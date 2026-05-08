@@ -139,7 +139,7 @@ cd quant-platform
 # 2. 모노레포 의존성 (Turborepo)
 pnpm install
 
-# 3. 환경변수 — 레포 루트의 .env 에 KIS 5개 변수 채우기
+# 3. 환경변수 — 레포 루트의 .env 에 KIS 모드별 키 채우기
 #    (라이브 매매 안 쓰면 비워둬도 동작)
 cp .env.example .env  # 없다면 직접 생성
 $EDITOR .env
@@ -148,8 +148,9 @@ $EDITOR .env
 docker-compose up -d   # db / api / engine 모두 띄움
 ```
 
-**KIS env 5개**: `KIS_APP_KEY`, `KIS_APP_SECRET`, `KIS_ACCOUNT_NUMBER`,
-`KIS_ACCOUNT_PRODUCT_CODE`, `KIS_MODE`. 발급 절차는
+**KIS env (모드별)**: `KIS_PAPER_*` (모의), `KIS_REAL_*` (실전), 각 4개씩
+(`APP_KEY` / `APP_SECRET` / `ACCOUNT_NUMBER` / `ACCOUNT_PRODUCT_CODE`)
++ 기본 모드 지정용 `KIS_MODE`. 발급 절차는
 [엔진 README §4.2](./apps/engine/README.md#42-kis-open-api-키-발급).
 
 ### 4.3 앱 실행 (로컬 개발)

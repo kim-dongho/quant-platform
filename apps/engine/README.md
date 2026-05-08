@@ -100,26 +100,37 @@ apps/engine/
 
 엔진 컨테이너는 `docker-compose.yml` 의 `engine` 서비스를 통해 환경변수를
 받습니다. DB·Redis 접속 정보는 compose 가 자동으로 주입하므로 신경 쓸 필요 없고,
-**KIS 관련 5개 변수만 레포 루트의 `.env` 에 채워주면 됩니다.**
+**KIS 관련 변수를 모드별로 레포 루트의 `.env` 에 채워주면 됩니다.** 모의·실전은
+별도 키이므로 한쪽만 운영해도 되고, 둘 다 채우면 동시 운영이 가능합니다.
 
 ```bash
 # .env (레포 루트)
-KIS_APP_KEY=PSxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-KIS_APP_SECRET=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-KIS_ACCOUNT_NUMBER=12345678          # 8자리 계좌번호 (상품코드 제외)
-KIS_ACCOUNT_PRODUCT_CODE=01          # 종합계좌 = 01 (생략 시 기본값)
-KIS_MODE=paper                       # paper | real (생략 시 paper)
+# --- 모의투자 (paper) ---
+KIS_PAPER_APP_KEY=PSxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+KIS_PAPER_APP_SECRET=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+KIS_PAPER_ACCOUNT_NUMBER=12345678          # 8자리 계좌번호 (상품코드 제외)
+KIS_PAPER_ACCOUNT_PRODUCT_CODE=01          # 종합계좌 = 01 (생략 시 기본값)
+
+# --- 실전투자 (real) — 검증 충분 후 활성화 ---
+KIS_REAL_APP_KEY=
+KIS_REAL_APP_SECRET=
+KIS_REAL_ACCOUNT_NUMBER=
+KIS_REAL_ACCOUNT_PRODUCT_CODE=01
+
+KIS_MODE=paper                              # paper | real (CLI --mode 미지정 시 기본)
 ```
 
-| 변수                        | 필수 | 설명                                                               |
-| --------------------------- | ---- | ------------------------------------------------------------------ |
-| `KIS_APP_KEY`               | ✅   | KIS Developers 에서 발급받은 앱 키. **모의·실전이 별도 키.**       |
-| `KIS_APP_SECRET`            | ✅   | 앱 시크릿. 노출 금지.                                              |
-| `KIS_ACCOUNT_NUMBER`        | ✅   | 계좌번호 앞 8자리 (상품코드 제외).                                 |
-| `KIS_ACCOUNT_PRODUCT_CODE`  | ⬜   | 보통 `01` (종합매매). 다른 상품 쓰면 변경.                         |
-| `KIS_MODE`                  | ⬜   | `paper` (모의) / `real` (실전). 미지정 시 모의투자로 안전하게 시작. |
+| 변수                                | 필수 | 설명                                                                    |
+| ----------------------------------- | ---- | ----------------------------------------------------------------------- |
+| `KIS_PAPER_APP_KEY` / `KIS_REAL_APP_KEY`               | ✅\* | KIS Developers 에서 발급. **모의·실전이 완전 별도 키.**          |
+| `KIS_PAPER_APP_SECRET` / `KIS_REAL_APP_SECRET`         | ✅\* | 앱 시크릿. 노출 금지.                                            |
+| `KIS_PAPER_ACCOUNT_NUMBER` / `KIS_REAL_ACCOUNT_NUMBER` | ✅\* | 계좌번호 앞 8자리 (상품코드 제외).                               |
+| `KIS_*_ACCOUNT_PRODUCT_CODE`        | ⬜   | 보통 `01` (종합매매). 다른 상품 쓰면 변경.                              |
+| `KIS_MODE`                          | ⬜   | `paper` / `real`. CLI `--mode` 미지정 시 기본값. 미설정 시 paper.       |
 
-`KIS_MODE` 에 따라 base URL 과 tr_id 가 자동 분기됩니다 (`src/service/kis/client.py`):
+\* 운영하려는 모드에 한해 필수 — 모의만 쓰면 `KIS_PAPER_*` 만 채우면 됩니다.
+
+각 클라이언트 인스턴스는 mode 에 따라 base URL 과 tr_id 가 자동 분기됩니다 (`src/service/kis/client.py`):
 
 - `paper` → `https://openapivts.koreainvestment.com:29443`
 - `real`  → `https://openapi.koreainvestment.com:9443`
@@ -139,7 +150,8 @@ KIS_MODE=paper                       # paper | real (생략 시 paper)
    - **실전 (real)**: 앱 등록 시 "실전투자" 선택. 실제 자금 거래.
    - **모의 (paper)**: 앱 등록 시 "모의투자" 선택. 가상 자금. **개발·테스트는 항상 이쪽으로.**
 4. **계좌번호 확인** — 앱 또는 HTS 의 계좌번호 (예: `12345678-01`) 에서
-   `-` 앞 8자리가 `KIS_ACCOUNT_NUMBER`, 뒤 2자리가 `KIS_ACCOUNT_PRODUCT_CODE` 입니다.
+   `-` 앞 8자리가 `*_ACCOUNT_NUMBER`, 뒤 2자리가 `*_ACCOUNT_PRODUCT_CODE` 입니다
+   (`*` 는 `KIS_PAPER` / `KIS_REAL`).
 
 > ⚠️ `.env` 는 `.gitignore` 에 포함되어 있는지 반드시 확인하세요. APP_SECRET 이
 > 깃 히스토리에 들어가면 즉시 KIS 포털에서 재발급해야 합니다.
