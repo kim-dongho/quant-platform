@@ -6,6 +6,7 @@
 - **EGW00123 (만료 토큰) 자동 재시도** — 토큰 무효화 + 재발급 + 1회 재호출
 - 모의투자/실전 URL·tr_id 자동 분기 (KIS_MODE=paper|real)
 """
+
 from __future__ import annotations
 
 import json
@@ -66,16 +67,22 @@ class KisClient:
         if self.mode not in ("paper", "real"):
             raise KisError(f"invalid mode: {self.mode}")
 
-        # 모드 별 키 우선 (KIS_PAPER_* / KIS_REAL_*), 없으면 구 통합 키 (KIS_APP_KEY 등)
-        # — 구 환경 호환 (모드 1개만 운영 중인 경우).
-        fallbacks = ("KIS_APP_KEY",) if self.mode == "paper" else ()
-        self.app_key = _env_for_mode(self.mode, "APP_KEY", ("KIS_APP_KEY",))
-        self.app_secret = _env_for_mode(self.mode, "APP_SECRET", ("KIS_APP_SECRET",))
+        # 모드 별 키 우선 (KIS_PAPER_* / KIS_REAL_*), paper 만 구 통합 키 (KIS_APP_KEY 등) fallback.
+        # — 구 환경은 모의투자 단일 운영이었으므로 real 모드는 fallback 금지.
+        legacy = self.mode == "paper"
+        self.app_key = _env_for_mode(self.mode, "APP_KEY", ("KIS_APP_KEY",) if legacy else ())
+        self.app_secret = _env_for_mode(
+            self.mode, "APP_SECRET", ("KIS_APP_SECRET",) if legacy else ()
+        )
         self.account_number = _env_for_mode(
-            self.mode, "ACCOUNT_NUMBER", ("KIS_ACCOUNT_NUMBER",)
+            self.mode, "ACCOUNT_NUMBER", ("KIS_ACCOUNT_NUMBER",) if legacy else ()
         )
         self.account_product = (
-            _env_for_mode(self.mode, "ACCOUNT_PRODUCT_CODE", ("KIS_ACCOUNT_PRODUCT_CODE",))
+            _env_for_mode(
+                self.mode,
+                "ACCOUNT_PRODUCT_CODE",
+                ("KIS_ACCOUNT_PRODUCT_CODE",) if legacy else (),
+            )
             or "01"
         )
 
@@ -189,11 +196,7 @@ class KisClient:
     def _get_token(self) -> str:
         with self._lock:
             now = datetime.now(timezone.utc)
-            if (
-                not self._token
-                or not self._token_expires
-                or now >= self._token_expires
-            ):
+            if not self._token or not self._token_expires or now >= self._token_expires:
                 return self._issue_token()
             return self._token
 
@@ -416,9 +419,9 @@ class KisClient:
             "INQR_STRT_DT": sdt,
             "INQR_END_DT": edt,
             "SLL_BUY_DVSN_CD": "00",  # 전체
-            "INQR_DVSN": "00",         # 역순(최신부터)
+            "INQR_DVSN": "00",  # 역순(최신부터)
             "PDNO": "",
-            "CCLD_DVSN": "00",          # 전체(체결/미체결)
+            "CCLD_DVSN": "00",  # 전체(체결/미체결)
             "ORD_GNO_BRNO": "",
             "ODNO": "",
             "INQR_DVSN_3": "00",
