@@ -348,30 +348,51 @@ def run_once(dry_run: bool = False, mode: str = "paper") -> dict[str, Any]:
         selected.append((c, gap))
 
     # ─── 4. 매수 주문 ────────────────────────────────────────
-    # position_size_krw > 0 → 종목당 고정 배분.
-    # position_size_krw <= 0 → 자본 균등 분배 (현재 잔고 / 빈 슬롯).
-    #   1주도 못 사는 후보가 생기면 다음 후보가 같은 size 로 시도. 잔고 부족분만 스킵.
+    # position_size_krw > 0 → 종목당 고정 배분 (사용자 명시).
+    # position_size_krw <= 0 → ranking 우선 라운드로빈 (자본 활용도 극대화).
+    #   1라운드: ranking 1위부터 N위까지 각 1주씩 (자본 부족하면 거기서 중단)
+    #   2라운드+: 자본 남으면 ranking 1위부터 한 주씩 추가 매수
+    #   효과: 비싼 ranking 상위 종목도 1주는 보유 → 분산 + ranking 알파 동시 확보
     fixed_size = int(strategy.get("position_size_krw") or 0)
     equal_weight = fixed_size <= 0
-    auto_size = int(cash // max(open_slots, 1)) if equal_weight else 0
-    if equal_weight:
-        print(f"💸 자본 균등 분배 — 잔고 ₩{cash:,.0f} ÷ 슬롯 {open_slots} = 종목당 ₩{auto_size:,}")
 
     buys: list[dict[str, Any]] = []
+    qty_by_idx: list[int] = [0] * len(selected)
+    prices = [float(c.get("price") or 0) for c, _ in selected]
+
+    if equal_weight:
+        # ranking 우선 라운드로빈 — 자본 다 쓸 때까지
+        cash_pool = float(cash)
+        while True:
+            progressed = False
+            for i, p in enumerate(prices):
+                if p > 0 and cash_pool >= p:
+                    qty_by_idx[i] += 1
+                    cash_pool -= p
+                    progressed = True
+            if not progressed:
+                break
+        print(
+            f"💸 ranking 우선 분배 — 잔고 ₩{cash:,.0f} → 매수 예정 ₩{cash - cash_pool:,.0f} "
+            f"(잔여 ₩{cash_pool:,.0f})"
+        )
+    else:
+        # 종목당 고정 배분 — 기존 동작 유지
+        for i, p in enumerate(prices):
+            if p > 0:
+                qty_by_idx[i] = int(fixed_size // p)
+
     for i, (c, gap) in enumerate(selected):
-        if i > 0 and not dry_run:
-            time.sleep(KIS_QUOTE_SLEEP_SEC)
         symbol = c["symbol"]
         name = c.get("company_name") or symbol
         label = _label(symbol, name)
-        price = float(c.get("price") or 0)
-        size_krw = auto_size if equal_weight else fixed_size
-        if price <= 0 or size_krw <= 0:
-            print(f"   ⚠️  {label}: 가격/사이즈 0 → 스킵")
+        price = prices[i]
+        qty = qty_by_idx[i]
+        if price <= 0:
+            print(f"   ⚠️  {label}: 가격 0 → 스킵")
             continue
-        qty = int(size_krw // price)
         if qty <= 0:
-            print(f"   ⚠️  {label}: position_size ₩{size_krw:,}로 1주도 못 매수 → 스킵")
+            print(f"   ⚠️  {label}: 자본 부족 → 스킵 (price=₩{price:,.0f})")
             continue
         cost = qty * price
         if cost > cash:
@@ -385,6 +406,8 @@ def run_once(dry_run: bool = False, mode: str = "paper") -> dict[str, Any]:
             buys.append(record)
             cash -= cost
             continue
+        if buys and not dry_run:
+            time.sleep(KIS_QUOTE_SLEEP_SEC)
         if _place_order_with_retry(kis, symbol, qty, side="buy"):
             buys.append(record)
             cash -= cost
