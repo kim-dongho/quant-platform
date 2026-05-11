@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 
+import { getDiscoverRun } from '@/entities/portfolio/api/portfolio-api';
 import {
   useCancelDiscover,
   useDiscoverJobStatus,
@@ -10,6 +11,7 @@ import {
 import type {
   Clause,
   DiscoverJobState,
+  DiscoverResult,
   ExitPolicy,
   FactorKey,
   RuleConfig,
@@ -18,6 +20,7 @@ import type {
 import { calcCombinations } from '../lib/calc-combinations';
 import { DEFAULT_SELECTED } from '../model/factor-meta';
 import { DiscoverForm } from './discover-form';
+import { DiscoverHistory } from './discover-history';
 import { DiscoverProgress } from './discover-progress';
 import { DiscoverResults } from './discover-results';
 
@@ -38,6 +41,9 @@ export const DiscoverDialog = ({ open, onClose, defaults, exitPolicy, onApply }:
   const [topN, setTopN] = useState(5);
   const [selectedFactors, setSelectedFactors] = useState<Set<FactorKey>>(new Set(DEFAULT_SELECTED));
   const [jobId, setJobId] = useState<string | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
+  // DB 에서 복원한 과거 결과 — jobId 없이도 결과 화면 띄울 수 있게.
+  const [historyResult, setHistoryResult] = useState<DiscoverResult | null>(null);
 
   const startMutation = useStartDiscover();
   const cancelMutation = useCancelDiscover();
@@ -69,8 +75,23 @@ export const DiscoverDialog = ({ open, onClose, defaults, exitPolicy, onApply }:
 
   const reset = () => {
     setJobId(null);
+    setHistoryResult(null);
     startMutation.reset();
     cancelMutation.reset();
+  };
+
+  // 이력에서 한 건 선택 — params 로 form 채우고 result 복원해 바로 결과 화면 표시.
+  const loadHistory = async (id: number) => {
+    const run = await getDiscoverRun(id);
+    setUniverse(run.params.universe);
+    setNClauses((run.params.n_clauses ?? 1) as 1 | 2);
+    setMaxPositions(run.params.max_positions ?? defaults.max_positions);
+    setTopN(run.params.top_n ?? 5);
+    if (run.params.factors && run.params.factors.length > 0) {
+      setSelectedFactors(new Set(run.params.factors));
+    }
+    setHistoryResult(run.result);
+    setShowHistory(false);
   };
 
   // 닫으면 항상 처음 form 으로 — 다음 열 때 직전 결과·진행 화면 그대로 두지 않고 새로
@@ -91,8 +112,11 @@ export const DiscoverDialog = ({ open, onClose, defaults, exitPolicy, onApply }:
 
   const isRunning = !!jobId && (!job || job.status === 'running');
   // cancelled 상태일 때도 부분 결과(평가된 조합) 를 그대로 표시 — 사용자가 의도적으로 끊은
-  // 것이니 done 과 동일하게 처리.
-  const result = job?.status === 'done' || job?.status === 'cancelled' ? job.result : undefined;
+  // 것이니 done 과 동일하게 처리. 또는 이력에서 복원한 historyResult.
+  const result =
+    job?.status === 'done' || job?.status === 'cancelled'
+      ? job.result
+      : (historyResult ?? undefined);
   const errorMsg =
     startMutation.error?.message ?? (job?.status === 'error' ? job.error : undefined) ?? null;
 
@@ -115,7 +139,24 @@ export const DiscoverDialog = ({ open, onClose, defaults, exitPolicy, onApply }:
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-5">
-          {!jobId && !startMutation.isPending && (
+          {!jobId && !startMutation.isPending && !result && (
+            <div className="flex items-center justify-end">
+              <button
+                type="button"
+                onClick={() => setShowHistory((v) => !v)}
+                className="border-outline-variant/60 bg-surface text-on-surface-variant hover:bg-surface-container-low inline-flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium"
+              >
+                <span className="material-symbols-outlined text-[14px]">history</span>
+                최근 탐색
+              </button>
+            </div>
+          )}
+
+          {showHistory && !jobId && !result && (
+            <DiscoverHistory onSelect={loadHistory} onClose={() => setShowHistory(false)} />
+          )}
+
+          {!jobId && !startMutation.isPending && !result && !showHistory && (
             <DiscoverForm
               universe={universe}
               setUniverse={setUniverse}
