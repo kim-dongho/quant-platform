@@ -29,3 +29,6 @@ node_modules
 
 # Claude Code local settings (per-developer permission allowlist)
 .claude/settings.local.json
+
+# Docker compose 로컬 override (개발자별 DB tunnel 등 — VPS DB 원격 접근 설정)
+docker-compose.override.yml

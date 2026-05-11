@@ -1,3 +1,5 @@
+import os
+
 import uvicorn
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
@@ -8,10 +10,14 @@ from src.core.database import init_db
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 스키마만 초기화 — 데이터 수집은 scripts/ingest-universe.sh 로 별도 실행
-    print("🛠️ Initializing DB schema...")
-    init_db()
-    print("✅ Schema ready. To populate data, run: ./scripts/ingest-universe.sh")
+    # prod DB 를 원격으로 바라보는 로컬 dev 환경에선 끄는 게 안전.
+    # default=true 라 운영 (VPS) 에선 자동으로 schema 적용됨.
+    if os.getenv("INIT_DB_ON_STARTUP", "true").lower() in ("1", "true", "yes"):
+        print("🛠️ Initializing DB schema...")
+        init_db()
+        print("✅ Schema ready. To populate data, run: ./scripts/ingest-universe.sh")
+    else:
+        print("⏭️  INIT_DB_ON_STARTUP=false — skipping schema init (remote DB mode)")
     yield
     print("👋 Quant Engine Shutting Down...")
 
