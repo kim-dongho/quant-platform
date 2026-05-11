@@ -1,11 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import type { DiscoverJobState, RuleConfig } from '../model/types';
+import type {
+  DiscoverJobState,
+  DiscoverRunDetail,
+  DiscoverRunSummary,
+  RuleConfig,
+} from '../model/types';
 import {
   backtestPortfolio,
   cancelDiscover,
+  deleteDiscoverRun,
   discoverStrategies,
+  getDiscoverRun,
   getDiscoverStatus,
+  listDiscoverRuns,
   screenPortfolio,
   startDiscover,
 } from './portfolio-api';
@@ -64,3 +72,30 @@ export const useScreenPortfolioQuery = (config: RuleConfig | null | undefined) =
     enabled: !!config && config.clauses.length > 0,
     staleTime: 60_000, // 1분 — 장중엔 가끔 갱신되어도 충분
   });
+
+// ─────────────────────────────────────────────────────────────
+// discover 영구 저장본
+// ─────────────────────────────────────────────────────────────
+export const useDiscoverRuns = (params?: { limit?: number; universe?: string }) =>
+  useQuery<DiscoverRunSummary[]>({
+    queryKey: ['discoverRuns', params],
+    queryFn: () => listDiscoverRuns(params),
+    staleTime: 30_000,
+  });
+
+export const useDiscoverRun = (id: number | null) =>
+  useQuery<DiscoverRunDetail>({
+    queryKey: ['discoverRun', id],
+    queryFn: () => getDiscoverRun(id as number),
+    enabled: id != null,
+  });
+
+export const useDeleteDiscoverRun = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: deleteDiscoverRun,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['discoverRuns'] });
+    },
+  });
+};

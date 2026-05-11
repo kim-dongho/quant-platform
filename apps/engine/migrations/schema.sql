@@ -151,3 +151,17 @@ CREATE TABLE IF NOT EXISTS fundamental_factors (
 
 CREATE INDEX IF NOT EXISTS ix_fundfactors_symbol_time ON fundamental_factors (symbol, time DESC);
 CREATE INDEX IF NOT EXISTS ix_fundfactors_time ON fundamental_factors (time DESC);
+
+-- discover (grid search) 실행 이력 — params + result 통째.
+-- 1회 실행 = 1 row. 한 row 안에 후보 전략 N개 (result 안 all/top 등) 가 묶여 있음.
+-- 컨테이너 재시작 후 이전 결과 복원·이력 비교 용도.
+CREATE TABLE IF NOT EXISTS discover_runs (
+    id          BIGSERIAL PRIMARY KEY,
+    universe    VARCHAR(50) NOT NULL,    -- 빠른 필터 (params 의 universe 와 중복이지만 인덱스 가능)
+    params      JSONB NOT NULL,           -- DiscoverRequest 통째
+    result      JSONB NOT NULL,           -- discover() 반환값 통째 (all/top/ranges/...)
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS ix_discover_runs_created ON discover_runs (created_at DESC);
+CREATE INDEX IF NOT EXISTS ix_discover_runs_universe ON discover_runs (universe, created_at DESC);

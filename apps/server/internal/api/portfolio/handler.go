@@ -203,3 +203,42 @@ func DiscoverCancel(c *fiber.Ctx) error {
 	jobID := c.Params("job_id")
 	return proxy.Post(c, proxy.EngineBase+"/portfolio/discover/cancel/"+jobID)
 }
+
+// ListDiscoverRuns godoc
+// @Summary      전략 자동 탐색 이력 목록
+// @Description  완료된 discover 실행 이력 — 최근순. params + top 1~3 등 미리보기. result 통째는 GET /runs/:id.
+// @Tags         portfolio
+// @Produce      json
+// @Param        limit     query    int     false  "최대 개수 (default 20, max 100)"
+// @Param        universe  query    string  false  "universe 필터"
+// @Success      200       {array}  map[string]interface{}
+// @Router       /portfolio/discover/runs [get]
+func ListDiscoverRuns(c *fiber.Ctx) error {
+	return proxy.Get(c, proxy.EngineBase+"/portfolio/discover/runs?"+c.Context().QueryArgs().String())
+}
+
+// GetDiscoverRun godoc
+// @Summary      전략 자동 탐색 이력 상세
+// @Description  params + result 통째 반환 — UI 화면 복원용.
+// @Tags         portfolio
+// @Produce      json
+// @Param        id  path      int  true  "Run ID"
+// @Success      200 {object}  map[string]interface{}
+// @Failure      404 {object}  map[string]string
+// @Router       /portfolio/discover/runs/{id} [get]
+func GetDiscoverRun(c *fiber.Ctx) error {
+	id := c.Params("id")
+	return proxy.Get(c, proxy.EngineBase+"/portfolio/discover/runs/"+id)
+}
+
+// DeleteDiscoverRun godoc
+// @Summary      전략 자동 탐색 이력 삭제
+// @Tags         portfolio
+// @Param        id  path  int  true  "Run ID"
+// @Success      200 {object}  map[string]interface{}
+// @Failure      404 {object}  map[string]string
+// @Router       /portfolio/discover/runs/{id} [delete]
+func DeleteDiscoverRun(c *fiber.Ctx) error {
+	id := c.Params("id")
+	return proxy.Delete(c, proxy.EngineBase+"/portfolio/discover/runs/"+id)
+}

@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import json
 import threading
 import time
 import uuid
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
+from sqlalchemy import text
 
 from src.api.deps import exit_policy_to_dict
 from src.api.schemas import (
@@ -16,6 +18,7 @@ from src.api.schemas import (
     PortfolioBacktestRequest,
     ScreenRequest,
 )
+from src.core.database import engine
 from src.service.backtest import (
     discover,
     factor_portfolio_backtest,
@@ -146,9 +149,16 @@ def _run_discover_job(job_id: str, params: Dict[str, Any]) -> None:
             job = _DISCOVER_JOBS.get(job_id)
             if job is not None:
                 # 사용자 cancel 요청으로 끝났으면 status=cancelled, 아니면 done.
-                job["status"] = "cancelled" if result.get("cancelled") else "done"
+                cancelled = bool(result.get("cancelled"))
+                job["status"] = "cancelled" if cancelled else "done"
                 job["result"] = result
                 job["ended_at"] = time.time()
+        # cancelled 가 아닌 정상 완료만 영구 저장 (불완전 결과는 노이즈).
+        if not result.get("cancelled"):
+            try:
+                _save_discover_run(params, result)
+            except Exception as e:
+                print(f"⚠️  discover_runs insert failed (job {job_id}): {e}")
     except Exception as e:
         print(f"❌ Discover job {job_id} failed: {e}")
         with _DISCOVER_JOBS_LOCK:
@@ -157,6 +167,26 @@ def _run_discover_job(job_id: str, params: Dict[str, Any]) -> None:
                 job["status"] = "error"
                 job["error"] = str(e)
                 job["ended_at"] = time.time()
+
+
+def _save_discover_run(params: Dict[str, Any], result: Dict[str, Any]) -> int:
+    """완료된 discover 결과를 DB 에 누적 저장. 반환: 새 row id."""
+    with engine.begin() as conn:
+        row = conn.execute(
+            text(
+                """
+                INSERT INTO discover_runs (universe, params, result)
+                VALUES (:universe, CAST(:params AS JSONB), CAST(:result AS JSONB))
+                RETURNING id
+                """
+            ),
+            {
+                "universe": params.get("universe", ""),
+                "params": json.dumps(params, default=str),
+                "result": json.dumps(result, default=str),
+            },
+        ).fetchone()
+    return int(row[0]) if row else 0
 
 
 @router.post("/discover/start")
@@ -222,3 +252,73 @@ def discover_cancel(job_id: str):
                 return dict(j)
     # timeout — 클라이언트는 polling 으로 마저 받음
     return {"job_id": job_id, "status": "cancelling"}
+
+
+# ─────────────────────────────────────────────────────────────
+# discover 이력 — DB 영구 저장본 조회
+# ─────────────────────────────────────────────────────────────
+@router.get("/discover/runs")
+def list_discover_runs(limit: int = 20, universe: Optional[str] = None):
+    """최근 discover 실행 이력. result 통째는 무거우니 메타만 반환.
+
+    반환: [{id, universe, params, created_at, top_summary}]
+      top_summary: 결과의 1~3등 sharpe·cagr 만 미리보기로 (전체는 /result/:id).
+    """
+    limit = max(1, min(limit, 100))
+    sql = """
+        SELECT id, universe, params, created_at,
+               jsonb_path_query_array(result, '$.all[0 to 2]') AS top_summary
+        FROM discover_runs
+        {where}
+        ORDER BY created_at DESC
+        LIMIT :lim
+    """
+    where = "WHERE universe = :u" if universe else ""
+    params_: Dict[str, Any] = {"lim": limit}
+    if universe:
+        params_["u"] = universe
+    with engine.connect() as conn:
+        rows = conn.execute(text(sql.format(where=where)), params_).all()
+    return [
+        {
+            "id": r[0],
+            "universe": r[1],
+            "params": r[2],
+            "created_at": r[3].isoformat() if r[3] else None,
+            "top_summary": r[4] or [],
+        }
+        for r in rows
+    ]
+
+
+@router.get("/discover/runs/{run_id}")
+def get_discover_run(run_id: int):
+    """단일 discover 결과 상세 — params + result 통째 (UI 화면 복원용)."""
+    with engine.connect() as conn:
+        row = conn.execute(
+            text(
+                """
+                SELECT id, universe, params, result, created_at
+                FROM discover_runs WHERE id = :id
+                """
+            ),
+            {"id": run_id},
+        ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Discover run not found")
+    return {
+        "id": row[0],
+        "universe": row[1],
+        "params": row[2],
+        "result": row[3],
+        "created_at": row[4].isoformat() if row[4] else None,
+    }
+
+
+@router.delete("/discover/runs/{run_id}")
+def delete_discover_run(run_id: int):
+    with engine.begin() as conn:
+        res = conn.execute(text("DELETE FROM discover_runs WHERE id = :id"), {"id": run_id})
+    if res.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Discover run not found")
+    return {"deleted": run_id}

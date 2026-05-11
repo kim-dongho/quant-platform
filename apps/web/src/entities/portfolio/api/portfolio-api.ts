@@ -5,6 +5,8 @@ import type {
   DiscoverJobState,
   DiscoverRequest,
   DiscoverResult,
+  DiscoverRunDetail,
+  DiscoverRunSummary,
   ExitPolicy,
   PortfolioBacktestResult,
   RuleConfig,
@@ -49,5 +51,28 @@ export const getDiscoverStatus = async (jobId: string): Promise<DiscoverJobState
 export const cancelDiscover = async (jobId: string): Promise<DiscoverJobState> => {
   // backend 가 loop 가 멈출 때까지 짧게 대기 후 최종 status + 부분 결과를 반환.
   const { data } = await apiClient.post<DiscoverJobState>(`/portfolio/discover/cancel/${jobId}`);
+  return data;
+};
+
+// ─────────────────────────────────────────────────────────────
+// discover 영구 저장본 — 이력 조회·복원
+// ─────────────────────────────────────────────────────────────
+export const listDiscoverRuns = async (params?: {
+  limit?: number;
+  universe?: string;
+}): Promise<DiscoverRunSummary[]> => {
+  const { data } = await apiClient.get<DiscoverRunSummary[]>('/portfolio/discover/runs', {
+    params,
+  });
+  return data;
+};
+
+export const getDiscoverRun = async (id: number): Promise<DiscoverRunDetail> => {
+  const { data } = await apiClient.get<DiscoverRunDetail>(`/portfolio/discover/runs/${id}`);
+  return data;
+};
+
+export const deleteDiscoverRun = async (id: number): Promise<{ deleted: number }> => {
+  const { data } = await apiClient.delete<{ deleted: number }>(`/portfolio/discover/runs/${id}`);
   return data;
 };

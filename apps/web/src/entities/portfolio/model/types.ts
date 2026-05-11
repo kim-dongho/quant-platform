@@ -162,3 +162,23 @@ export interface DiscoverJobState {
   result?: DiscoverResult;
   error?: string;
 }
+
+// ─────────────────────────────────────────────────────────────
+// 전략 자동 탐색 영구 저장본 (DB)
+// ─────────────────────────────────────────────────────────────
+export interface DiscoverRunSummary {
+  id: number;
+  universe: string;
+  params: DiscoverRequest;
+  created_at: string;
+  /** result.all 의 1~3등 sharpe·cagr 만 미리보기 */
+  top_summary: DiscoveredRow[];
+}
+
+export interface DiscoverRunDetail {
+  id: number;
+  universe: string;
+  params: DiscoverRequest;
+  result: DiscoverResult;
+  created_at: string;
+}
