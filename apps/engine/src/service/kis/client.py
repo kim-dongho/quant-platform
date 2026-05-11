@@ -373,6 +373,122 @@ class KisClient:
         return self._retry_on_token_expired(_do)
 
     # ---------------------------------------------------------------------
+    # 스탑지정가 매도 주문 (ORD_DVSN=22) — KIS 서버가 정규장 시세 감시
+    # ---------------------------------------------------------------------
+    def place_stop_sell(
+        self,
+        symbol: str,
+        qty: int,
+        trigger_price: float,
+        limit_price: float,
+    ) -> Dict[str, Any]:
+        """스탑지정가 매도 주문.
+
+        - trigger_price (CNDT_PRIC): 현재가가 이 값 닿으면 발동
+        - limit_price (ORD_UNPR): 발동 후 매도 지정가. 갭다운 미체결 방지 위해 trigger 보다
+          1~3% 낮게 잡는 게 일반적.
+        - 감시 시간: KRX 정규장 09:00~15:30. 시간외/야간 미작동, 다음 영업일 재개.
+        """
+        self._assert_configured()
+        if qty <= 0:
+            raise KisError(f"qty must be positive: {qty}")
+        if trigger_price <= 0 or limit_price <= 0:
+            raise KisError("trigger_price, limit_price required (>0)")
+
+        code = _normalize_krx_code(symbol)
+        # 매도 tr_id 그대로 사용 — ORD_DVSN=22 로 구분.
+        tr_id = "TTTC0801U" if self.mode == "real" else "VTTC0801U"
+
+        body = {
+            "CANO": self.account_number,
+            "ACNT_PRDT_CD": self.account_product,
+            "PDNO": code,
+            "ORD_DVSN": "22",
+            "ORD_QTY": str(qty),
+            "ORD_UNPR": str(int(limit_price)),
+            "CNDT_PRIC": str(int(trigger_price)),
+        }
+
+        def _do() -> Dict[str, Any]:
+            resp = requests.post(
+                f"{self.base_url}/uapi/domestic-stock/v1/trading/order-cash",
+                headers=self._auth_headers(tr_id),
+                json=body,
+                timeout=15,
+            )
+            if resp.status_code != 200:
+                raise KisError(f"Stop order HTTP {resp.status_code}: {resp.text}")
+            data = resp.json()
+            if data.get("rt_cd") != "0":
+                raise KisError(f"KIS {data.get('msg_cd')}: {data.get('msg1')}")
+            out = data.get("output") or {}
+            return {
+                "symbol": code,
+                "qty": qty,
+                "trigger_price": trigger_price,
+                "limit_price": limit_price,
+                "order_no": out.get("ODNO"),
+                "branch_no": out.get("KRX_FWDG_ORD_ORGNO"),
+                "order_time": out.get("ORD_TMD"),
+                "mode": self.mode,
+            }
+
+        return self._retry_on_token_expired(_do)
+
+    # ---------------------------------------------------------------------
+    # 주문 취소 (order-rvsecncl, RVSE_CNCL_DVSN_CD=02)
+    # ---------------------------------------------------------------------
+    def cancel_order(
+        self,
+        branch_no: str,
+        order_no: str,
+        qty: int = 0,
+    ) -> Dict[str, Any]:
+        """기존 주문 취소. branch_no/order_no 는 place_order/place_stop_sell 응답값.
+
+        qty=0 이면 전량 취소 (QTY_ALL_ORD_YN=Y). 부분 취소는 qty > 0.
+        """
+        self._assert_configured()
+        if not branch_no or not order_no:
+            raise KisError("branch_no, order_no required")
+
+        tr_id = "TTTC0803U" if self.mode == "real" else "VTTC0803U"
+        all_cancel = qty <= 0
+
+        body = {
+            "CANO": self.account_number,
+            "ACNT_PRDT_CD": self.account_product,
+            "KRX_FWDG_ORD_ORGNO": branch_no,
+            "ORGN_ODNO": order_no,
+            "ORD_DVSN": "00",
+            "RVSE_CNCL_DVSN_CD": "02",
+            "ORD_QTY": "0" if all_cancel else str(qty),
+            "ORD_UNPR": "0",
+            "QTY_ALL_ORD_YN": "Y" if all_cancel else "N",
+        }
+
+        def _do() -> Dict[str, Any]:
+            resp = requests.post(
+                f"{self.base_url}/uapi/domestic-stock/v1/trading/order-rvsecncl",
+                headers=self._auth_headers(tr_id),
+                json=body,
+                timeout=15,
+            )
+            if resp.status_code != 200:
+                raise KisError(f"Cancel HTTP {resp.status_code}: {resp.text}")
+            data = resp.json()
+            if data.get("rt_cd") != "0":
+                raise KisError(f"KIS {data.get('msg_cd')}: {data.get('msg1')}")
+            out = data.get("output") or {}
+            return {
+                "cancelled_order_no": order_no,
+                "new_order_no": out.get("ODNO"),
+                "mode": self.mode,
+            }
+
+        return self._retry_on_token_expired(_do)
+
+    # ---------------------------------------------------------------------
     # 주문/체결 내역
     # ---------------------------------------------------------------------
     def get_daily_orders(

@@ -26,7 +26,13 @@ from src.service.kis import KisClient, KisError, get_kis_client
 from src.service.live.hysteresis import evaluate_signal_exit
 from src.service.live.notify import notify_slack
 from src.service.live.strategy import get_active_strategy
-from src.service.live.trades import record_entry, record_exit, sync_with_holdings
+from src.service.live.trades import (
+    clear_stop_order,
+    record_entry,
+    record_exit,
+    record_stop_order,
+    sync_with_holdings,
+)
 from src.service.backtest import ExitPolicy
 from src.service.factor import run_screen
 
@@ -39,6 +45,10 @@ GAP_FILTER_PCT = 5.0
 KIS_QUOTE_SLEEP_SEC = 0.5
 # Rate limit(EGW00201)에 걸리면 1회 재시도.
 KIS_RATE_LIMIT_RETRY_SLEEP_SEC = 1.2
+
+# 스탑지정가 (ORD_DVSN=22) 안전마진. trigger 보다 limit 을 이만큼 낮게 잡아
+# 갭다운으로 시초가가 trigger 보다 낮아도 체결 보장.
+STOP_LIMIT_MARGIN_PCT = -2.0
 
 
 def _get_yesterday_close(symbol: str) -> Optional[float]:
@@ -104,6 +114,59 @@ def _place_order_with_retry(kis: KisClient, symbol: str, qty: int, side: str) ->
             print(f"   ❌ {side} failed: {e}")
             return False
     return False
+
+
+def _maybe_place_stop(
+    kis: KisClient,
+    trade_id: int,
+    symbol: str,
+    qty: int,
+    reference_price: float,
+    policy: ExitPolicy,
+    label: str,
+) -> None:
+    """매수 직후 또는 trailing 재조정 시 KIS 스탑지정가 발사 + DB 메타 저장.
+
+    reference_price: 진입가 (정적 stop) 또는 peak_price (trailing).
+    실패해도 거래 자체는 진행 — print 만 하고 다음으로.
+    """
+    if qty <= 0 or reference_price <= 0:
+        return
+    if policy.stop_loss_pct is None:
+        return  # stop 정책 없으면 발사 X
+
+    trigger = reference_price * (1 + policy.stop_loss_pct / 100)
+    limit = trigger * (1 + STOP_LIMIT_MARGIN_PCT / 100)
+    try:
+        resp = kis.place_stop_sell(symbol=symbol, qty=qty, trigger_price=trigger, limit_price=limit)
+        record_stop_order(
+            trade_id=trade_id,
+            order_no=resp.get("order_no") or "",
+            branch_no=resp.get("branch_no") or "",
+            trigger_price=trigger,
+            limit_price=limit,
+        )
+        print(
+            f"   🛡️  stop-loss @ ₩{trigger:,.0f} (limit ₩{limit:,.0f}) "
+            f"[order={resp.get('order_no')}]"
+        )
+    except KisError as e:
+        print(f"   ⚠️  {label} stop-loss 발사 실패: {e}")
+
+
+def _maybe_cancel_stop(kis: KisClient, trade: dict[str, Any]) -> None:
+    """청산 직전 기존 stop 주문 취소 — 같은 종목에 stop+일반매도 충돌 방지."""
+    order_no = trade.get("stop_order_no")
+    branch_no = trade.get("stop_branch_no")
+    if not order_no or not branch_no:
+        return
+    try:
+        kis.cancel_order(branch_no=branch_no, order_no=order_no)
+        if trade.get("id") is not None:
+            clear_stop_order(int(trade["id"]))
+    except KisError as e:
+        # 이미 발동/만료된 주문일 수도 있어 경고만.
+        print(f"   ⚠️  stop cancel 실패: {e}")
 
 
 def _load_latest_factors(symbols: list[str]) -> dict[str, dict[str, Any]]:
@@ -279,6 +342,11 @@ def run_once(dry_run: bool = False, mode: str = "paper") -> dict[str, Any]:
             sells.append(record)
             sold_syms.add(symbol)
             continue
+        # 일반 매도 전에 기존 stop 주문 취소 — 미체결 stop 이 잔고 부족으로
+        # 다음 cron 까지 남아있는 걸 방지.
+        trade = open_trades.get(symbol)
+        if trade:
+            _maybe_cancel_stop(kis, trade)
         if _place_order_with_retry(kis, symbol, qty, side="sell"):
             sells.append(record)
             sold_syms.add(symbol)
@@ -405,21 +473,64 @@ def run_once(dry_run: bool = False, mode: str = "paper") -> dict[str, Any]:
             record["dry_run"] = True
             buys.append(record)
             cash -= cost
+            if policy.stop_loss_pct is not None:
+                trigger = price * (1 + policy.stop_loss_pct / 100)
+                limit = trigger * (1 + STOP_LIMIT_MARGIN_PCT / 100)
+                print(f"   🛡️  (dry-run) stop-loss @ ₩{trigger:,.0f} (limit ₩{limit:,.0f})")
             continue
         if buys and not dry_run:
             time.sleep(KIS_QUOTE_SLEEP_SEC)
         if _place_order_with_retry(kis, symbol, qty, side="buy"):
             buys.append(record)
             cash -= cost
-            record_entry(
+            trade_id = record_entry(
                 strategy_id=strategy["id"],
                 symbol=symbol,
                 name=name,
                 qty=qty,
                 entry_price=price,
             )
+            # 매수 직후 KIS 스탑지정가 매도 발사 — entry_price 기준 정적 stop.
+            # trailing 재조정은 다음 cron 의 peak_price 갱신 후 별도 phase 에서 처리.
+            time.sleep(KIS_QUOTE_SLEEP_SEC)
+            _maybe_place_stop(
+                kis=kis,
+                trade_id=trade_id,
+                symbol=symbol,
+                qty=qty,
+                reference_price=price,
+                policy=policy,
+                label=label,
+            )
 
-    # ─── 5. last_rebalance_at 갱신 ────────────────────────────
+    # ─── 5. 기존 보유분 stop 발사 보강 ────────────────────────
+    # 이번 cron 의 신규 매수는 매수 직후 stop 을 같이 발사하지만, 어제 매수해서
+    # stop 메타 없이 들어온 보유분 + 코드 도입 이전부터 가지고 있던 종목까지
+    # 모두 stop 보호되도록 여기서 한 번 보강. 이미 stop_order_no 가 있으면 skip.
+    if not dry_run and policy.stop_loss_pct is not None:
+        for h in holdings:
+            symbol = h.get("symbol")
+            if not symbol or symbol in sold_syms:
+                continue
+            trade = open_trades.get(symbol)
+            if not trade or trade.get("stop_order_no"):
+                continue
+            qty = int(h.get("qty") or 0)
+            avg_cost = float(h.get("avg_cost") or 0)
+            if qty <= 0 or avg_cost <= 0:
+                continue
+            time.sleep(KIS_QUOTE_SLEEP_SEC)
+            _maybe_place_stop(
+                kis=kis,
+                trade_id=int(trade["id"]),
+                symbol=symbol,
+                qty=qty,
+                reference_price=avg_cost,
+                policy=policy,
+                label=_label(symbol, h.get("name")),
+            )
+
+    # ─── 6. last_rebalance_at 갱신 ────────────────────────────
     if not dry_run:
         try:
             with engine.begin() as conn:

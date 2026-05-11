@@ -90,9 +90,20 @@ CREATE TABLE IF NOT EXISTS live_trades (
     exit_date       DATE,
     exit_price      DOUBLE PRECISION,
     exit_reason     TEXT,
+    -- KIS 스탑지정가 매도 주문 (자동 손절). trailing 시 cancel → 재발사.
+    stop_order_no       VARCHAR(20),
+    stop_branch_no      VARCHAR(10),
+    stop_trigger_price  DOUBLE PRECISION,
+    stop_limit_price    DOUBLE PRECISION,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- 기존 라이브 환경 호환 — ALTER 로 누락된 컬럼 보강.
+ALTER TABLE live_trades ADD COLUMN IF NOT EXISTS stop_order_no      VARCHAR(20);
+ALTER TABLE live_trades ADD COLUMN IF NOT EXISTS stop_branch_no     VARCHAR(10);
+ALTER TABLE live_trades ADD COLUMN IF NOT EXISTS stop_trigger_price DOUBLE PRECISION;
+ALTER TABLE live_trades ADD COLUMN IF NOT EXISTS stop_limit_price   DOUBLE PRECISION;
 
 -- 한 전략 안에서 같은 심볼은 동시에 1개의 open trade만 (exit_date IS NULL).
 CREATE UNIQUE INDEX IF NOT EXISTS ux_live_trades_open

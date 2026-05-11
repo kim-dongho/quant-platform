@@ -30,7 +30,9 @@ def get_open_trades(strategy_id: int) -> list[dict[str, Any]]:
             conn.execute(
                 text(
                     """
-                SELECT id, symbol, name, qty, entry_date, entry_price, peak_price
+                SELECT id, symbol, name, qty, entry_date, entry_price, peak_price,
+                       stop_order_no, stop_branch_no,
+                       stop_trigger_price, stop_limit_price
                 FROM live_trades
                 WHERE strategy_id = :sid AND exit_date IS NULL
                 ORDER BY entry_date ASC, id ASC
@@ -199,6 +201,56 @@ def update_peak_price(trade_id: int, current_price: float) -> None:
                 """
             ),
             {"id": trade_id, "cur": current_price},
+        )
+
+
+def record_stop_order(
+    trade_id: int,
+    order_no: str,
+    branch_no: str,
+    trigger_price: float,
+    limit_price: float,
+) -> None:
+    """KIS 스탑지정가 매도 주문 발사 후 메타를 trade row 에 보관."""
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                UPDATE live_trades
+                SET stop_order_no = :ono,
+                    stop_branch_no = :bno,
+                    stop_trigger_price = :tp,
+                    stop_limit_price = :lp,
+                    updated_at = now()
+                WHERE id = :id
+                """
+            ),
+            {
+                "id": trade_id,
+                "ono": order_no,
+                "bno": branch_no,
+                "tp": trigger_price,
+                "lp": limit_price,
+            },
+        )
+
+
+def clear_stop_order(trade_id: int) -> None:
+    """trade row 의 stop 메타 null 로 — 취소 또는 발동 후 호출."""
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                UPDATE live_trades
+                SET stop_order_no = NULL,
+                    stop_branch_no = NULL,
+                    stop_trigger_price = NULL,
+                    stop_limit_price = NULL,
+                    updated_at = now()
+                WHERE id = :id
+                """
+            ),
+            {"id": trade_id},
         )
 
 
