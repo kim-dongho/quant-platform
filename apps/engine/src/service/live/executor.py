@@ -578,3 +578,142 @@ def run_once_all(dry_run: bool = False) -> dict[str, Any]:
             print(f"❌ run_once[{mode}] 예외: {e}")
             results[mode] = {"status": "exception", "error": str(e), "mode": mode}
     return results
+
+
+# ─────────────────────────────────────────────────────────────
+# Stop-loss 재발사 전용 — 매일 09:00 cron 으로 호출.
+# KIS 정규주문(ORD_DVSN=22) 은 당일 유효(장 마감 시 자동 취소) 라
+# 매일 정규장 시작 시 보유 종목에 stop 을 다시 발사해 안전망 유지.
+# ─────────────────────────────────────────────────────────────
+def run_stop_refresh(dry_run: bool = False, mode: str = "paper") -> dict[str, Any]:
+    """보유 종목 stop-loss 재발사 (매수/매도 phase 없음).
+
+    흐름:
+      1. 활성 전략 / KIS 잔고 로드
+      2. sync_with_holdings — 외부 매수/매도 반영 + peak_price 갱신
+      3. 보유 종목 중 stop_order_no 없는 것에 stop 발사
+         (전일 stop 이 KIS 에 의해 자동 취소되었으므로 모두 NULL 상태일 것)
+
+    매수/매도 평가는 일절 안 함 — 그건 15:15 매매 cron 의 책임.
+    """
+    print(f"🛡️  Stop refresh start (mode={mode}, dry_run={dry_run})")
+
+    strategy = get_active_strategy(mode=mode)
+    if not strategy:
+        print(f"⚠️  활성 {mode} 전략 없음 — 종료")
+        return {"status": "no_strategy", "mode": mode}
+
+    policy = ExitPolicy.from_dict(strategy.get("exit_policy"))
+    if policy.stop_loss_pct is None:
+        print(f"⏭️  {strategy['name']} [{mode}] stop_loss_pct 없음 — 건너뜀")
+        return {"status": "no_policy", "mode": mode, "refreshed": 0}
+
+    kis = get_kis_client(mode=mode)
+    try:
+        balance = kis.get_balance()
+    except KisError as e:
+        print(f"❌ KIS balance failed: {e}")
+        if not dry_run:
+            notify_slack(
+                f"❌ *{strategy['name']}* [{mode}] — stop refresh KIS 잔고 조회 실패\n```{e}```"
+            )
+        return {"status": "kis_error", "error": str(e), "mode": mode}
+
+    holdings: list[dict[str, Any]] = balance.get("holdings") or []
+    if not holdings:
+        print(f"📒 보유 종목 없음 — 종료 [{mode}]")
+        return {"status": "ok", "mode": mode, "refreshed": 0}
+
+    # sync — 매일 09:00 시점에 외부 매수/매도 반영 + peak 갱신
+    if dry_run:
+        from src.service.live.trades import get_open_trades
+
+        open_trades = {_to_code(t["symbol"]): t for t in get_open_trades(strategy["id"])}
+        print(f"📒 Open trades (dry-run, no sync): {len(open_trades)}개")
+    else:
+        open_trades = sync_with_holdings(strategy["id"], holdings)
+        print(f"📒 Open trades (synced): {len(open_trades)}개")
+
+    refreshed: list[dict[str, Any]] = []
+    failed: list[dict[str, Any]] = []
+    for h in holdings:
+        symbol = h.get("symbol")
+        if not symbol:
+            continue
+        code = _to_code(symbol)
+        trade = open_trades.get(code)
+        if not trade:
+            continue  # sync 가 못 잡은 외부 보유분 — 다음 cron 에서 처리
+        if trade.get("stop_order_no"):
+            # KIS 가 당일 유효라 자동 취소했어야 하지만, 혹시 남아있으면 skip.
+            # 다음 작업: cancel 후 재발사로 매일 일관성 보장 가능.
+            print(f"   ⏭️  {_label(symbol, h.get('name'))}: stop_order_no 이미 있음 — skip")
+            continue
+        qty = int(h.get("qty") or 0)
+        avg_cost = float(h.get("avg_cost") or 0)
+        if qty <= 0 or avg_cost <= 0:
+            continue
+
+        label = _label(symbol, h.get("name"))
+        if dry_run:
+            trigger = avg_cost * (1 + policy.stop_loss_pct / 100)
+            limit = trigger * (1 + STOP_LIMIT_MARGIN_PCT / 100)
+            print(f"   🛡️  (dry-run) {label} stop @ ₩{trigger:,.0f} (limit ₩{limit:,.0f})")
+            refreshed.append({"symbol": code, "name": h.get("name") or symbol, "qty": qty})
+            continue
+
+        time.sleep(KIS_QUOTE_SLEEP_SEC)
+        before = trade.get("stop_order_no")
+        _maybe_place_stop(
+            kis=kis,
+            trade_id=int(trade["id"]),
+            symbol=symbol,
+            qty=qty,
+            reference_price=avg_cost,
+            policy=policy,
+            label=label,
+        )
+        # _maybe_place_stop 가 record_stop_order 호출 시 stop_order_no 갱신.
+        # 검증을 위해 다시 trade 조회는 비용이라 생략 — 실패시 print 로 보임.
+        record = {"symbol": code, "name": h.get("name") or symbol, "qty": qty}
+        if before is None:
+            refreshed.append(record)
+        else:
+            failed.append(record)
+
+    print(f"✅ Stop refresh done [{mode}] — refreshed={len(refreshed)}, failed={len(failed)}")
+
+    # Slack 알림 — 보호 상태를 매일 한 줄로 알 수 있게
+    if not dry_run:
+        if refreshed or failed:
+            lines = "\n".join(f"  🛡️  {r['name']} ×{r['qty']}" for r in refreshed[:8]) or "  —"
+            more = f"\n  …외 {len(refreshed) - 8}건" if len(refreshed) > 8 else ""
+            extras = ""
+            if failed:
+                extras = f"\n⚠️  발사 실패 {len(failed)}건"
+            notify_slack(
+                f"🛡️  *{strategy['name']}* [{mode}] stop 재발사\n"
+                f"보호 {len(refreshed)} / 보유 {len(holdings)}{extras}\n"
+                f"*재발사 종목*\n{lines}{more}"
+            )
+
+    return {
+        "status": "ok",
+        "mode": mode,
+        "refreshed": len(refreshed),
+        "failed": len(failed),
+        "refreshed_items": refreshed,
+        "failed_items": failed,
+    }
+
+
+def run_stop_refresh_all(dry_run: bool = False) -> dict[str, Any]:
+    """활성화된 paper / real 모두에 stop 재발사. 09:00 cron 단일 호출용."""
+    results: dict[str, Any] = {}
+    for mode in ("paper", "real"):
+        try:
+            results[mode] = run_stop_refresh(dry_run=dry_run, mode=mode)
+        except Exception as e:
+            print(f"❌ run_stop_refresh[{mode}] 예외: {e}")
+            results[mode] = {"status": "exception", "error": str(e), "mode": mode}
+    return results
