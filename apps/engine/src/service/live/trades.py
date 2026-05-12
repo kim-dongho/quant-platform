@@ -323,15 +323,21 @@ def sync_with_holdings(
             f"   📝 {symbol} ({h.get('name') or symbol}): trade 신규 기록 (avg_cost ₩{avg_cost:,.0f})"
         )
 
-    # 2) trade에만 있는 종목 → 외부 청산으로 close
+    # 2) trade에만 있는 종목 → 청산 처리
+    # stop_order_no 가 있으면 KIS 스탑지정가 발동으로 매도된 것 → reason='stop_loss',
+    # exit_price 는 trigger 기준 추정 (실제 체결가는 trigger ~ limit 사이, 보통 0.1% 이내 슬리피지).
+    # 그 외는 external_close (외부에서 직접 매도한 경우, PnL 0 으로 close — 안전한 기본값).
     for symbol, t in list(open_trades.items()):
         if symbol in held:
             continue
-        # 현재가 모름 → entry_price로 close (PnL 0 가정). 정확도가 떨어지지만
-        # "외부 청산"임을 reason으로 명시.
-        record_exit(t["id"], exit_price=t["entry_price"], reason="external_close")
+        if t.get("stop_order_no") and t.get("stop_trigger_price"):
+            exit_price = float(t["stop_trigger_price"])
+            record_exit(t["id"], exit_price=exit_price, reason="stop_loss")
+            print(f"   🛡️  {symbol}: stop-loss 발동 매도 (trigger ≈ ₩{exit_price:,.0f}) → close")
+        else:
+            record_exit(t["id"], exit_price=t["entry_price"], reason="external_close")
+            print(f"   🧹 {symbol}: 잔고에 없음 → trade close (external_close)")
         del open_trades[symbol]
-        print(f"   🧹 {symbol}: 잔고에 없음 → trade close (external_close)")
 
     # 3) peak_price 갱신
     for symbol, t in open_trades.items():
