@@ -129,11 +129,16 @@ def _maybe_place_stop(
 
     reference_price: 진입가 (정적 stop) 또는 peak_price (trailing).
     실패해도 거래 자체는 진행 — print 만 하고 다음으로.
+
+    paper 모드는 ORD_DVSN=22 (스탑지정가) 미지원 — 종가 기준 cron 평가 (_evaluate_exits)
+    에만 의존. 시도 자체 skip 해서 무의미한 KIS 에러 호출 회피.
     """
     if qty <= 0 or reference_price <= 0:
         return
     if policy.stop_loss_pct is None:
         return  # stop 정책 없으면 발사 X
+    if kis.mode == "paper":
+        return  # 모의투자 미지원
 
     trigger = reference_price * (1 + policy.stop_loss_pct / 100)
     limit = trigger * (1 + STOP_LIMIT_MARGIN_PCT / 100)
@@ -597,6 +602,12 @@ def run_stop_refresh(dry_run: bool = False, mode: str = "paper") -> dict[str, An
     매수/매도 평가는 일절 안 함 — 그건 15:15 매매 cron 의 책임.
     """
     print(f"🛡️  Stop refresh start (mode={mode}, dry_run={dry_run})")
+
+    if mode == "paper":
+        # KIS 모의투자는 스탑지정가(ORD_DVSN=22) 미지원 — paper 는 종가 기준 cron
+        # 평가만으로 손절 처리. 자동 안전망(intraday) 은 real 에만 적용.
+        print("ℹ️  paper 는 KIS 스탑지정가 미지원 — 종료 (종가 기준 평가는 매매 cron 에서)")
+        return {"status": "unsupported_mode", "mode": "paper", "refreshed": 0}
 
     strategy = get_active_strategy(mode=mode)
     if not strategy:

@@ -50,11 +50,11 @@ def main() -> int:
     if args.mode == "all":
         result: dict = run_stop_refresh_all(dry_run=args.dry_run)
         statuses = [v.get("status") for v in result.values() if isinstance(v, dict)]
-        ok = any(s in ("ok", "no_strategy", "no_policy") for s in statuses)
+        ok = any(s in ("ok", "no_strategy", "no_policy", "unsupported_mode") for s in statuses)
     else:
         single = run_stop_refresh(dry_run=args.dry_run, mode=args.mode)
         result = {args.mode: single}
-        ok = single.get("status") in ("ok", "no_strategy", "no_policy")
+        ok = single.get("status") in ("ok", "no_strategy", "no_policy", "unsupported_mode")
 
     elapsed = (datetime.now() - started).total_seconds()
     print(f"⏱  Done in {elapsed:.1f}s")
