@@ -261,6 +261,8 @@ class KisClient:
             if data.get("rt_cd") != "0":
                 raise KisError(f"KIS {data.get('msg_cd')}: {data.get('msg1')}")
 
+            # KIS 는 당일 매도 체결 후에도 평단가 정보 유지 목적으로 qty=0 row 를 응답에
+            # 포함시킴. 보유 종목 의미가 없으므로 제외 (sync_with_holdings 와 일관).
             holdings = [
                 {
                     "symbol": row.get("pdno"),
@@ -273,6 +275,7 @@ class KisClient:
                     "profit_rate": float(row.get("evlu_pfls_rt") or 0),
                 }
                 for row in (data.get("output1") or [])
+                if int(row.get("hldg_qty") or 0) > 0
             ]
 
             output2 = data.get("output2") or []
