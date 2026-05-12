@@ -43,6 +43,33 @@ def _normalize_krx_code(symbol: str) -> str:
     return code
 
 
+def _krx_tick_size(price: float) -> int:
+    """KRX 호가 단위 (2023.01.25 개편 기준 — KOSPI 표).
+
+    매수/매도 주문가는 이 단위에 맞아야 KIS 가 받음 (APBK0506 회피).
+    """
+    p = int(price)
+    if p < 2_000:
+        return 1
+    if p < 5_000:
+        return 5
+    if p < 20_000:
+        return 10
+    if p < 50_000:
+        return 50
+    if p < 200_000:
+        return 100
+    if p < 500_000:
+        return 500
+    return 1_000
+
+
+def _floor_to_tick(price: float) -> int:
+    """호가 단위로 내림. 매도 trigger/limit 둘 다 내림 = 약간 보수적인 가격."""
+    tick = _krx_tick_size(price)
+    return int(price // tick * tick)
+
+
 def _env_for_mode(mode: str, suffix: str) -> str:
     """KIS_<MODE>_<SUFFIX> env 조회. 없으면 빈 문자열."""
     return os.getenv(f"KIS_{mode.upper()}_{suffix}", "").strip()
@@ -399,14 +426,18 @@ class KisClient:
         # 매도 tr_id 그대로 사용 — ORD_DVSN=22 로 구분.
         tr_id = "TTTC0801U" if self.mode == "real" else "VTTC0801U"
 
+        # KIS 는 호가 단위에 안 맞는 가격 거부 (APBK0506). 가격대별 tick 으로 내림.
+        trigger_int = _floor_to_tick(trigger_price)
+        limit_int = _floor_to_tick(limit_price)
+
         body = {
             "CANO": self.account_number,
             "ACNT_PRDT_CD": self.account_product,
             "PDNO": code,
             "ORD_DVSN": "22",
             "ORD_QTY": str(qty),
-            "ORD_UNPR": str(int(limit_price)),
-            "CNDT_PRIC": str(int(trigger_price)),
+            "ORD_UNPR": str(limit_int),
+            "CNDT_PRIC": str(trigger_int),
         }
 
         def _do() -> Dict[str, Any]:
@@ -425,8 +456,9 @@ class KisClient:
             return {
                 "symbol": code,
                 "qty": qty,
-                "trigger_price": trigger_price,
-                "limit_price": limit_price,
+                # 실제 KIS 에 보낸 정수 가격 반환 (호가 단위 정렬 후).
+                "trigger_price": trigger_int,
+                "limit_price": limit_int,
                 "order_no": out.get("ODNO"),
                 "branch_no": out.get("KRX_FWDG_ORD_ORGNO"),
                 "order_time": out.get("ORD_TMD"),

@@ -20,6 +20,18 @@ from sqlalchemy import text
 from src.core.database import engine
 
 
+def _to_code(symbol: str) -> str:
+    """live_trades 의 symbol 형식 통일 — '000155.KS' / '000155' → '000155'.
+
+    KIS 잔고 응답은 6자리, screen 결과는 .KS/.KQ suffix. sync_with_holdings 가
+    두 형식을 다른 종목으로 인식해 매일 trade row 가 close/재생성되는 버그가 있어
+    저장·조회·매칭 시 모두 6자리로 통일.
+    """
+    if not symbol:
+        return symbol
+    return symbol.split(".")[0]
+
+
 # ─────────────────────────────────────────────────────────────
 # 조회
 # ─────────────────────────────────────────────────────────────
@@ -107,12 +119,15 @@ def get_realized_pnl_summary(strategy_id: int) -> dict[str, Any]:
 
 
 def get_open_trade_by_symbol(strategy_id: int, symbol: str) -> Optional[dict[str, Any]]:
+    symbol = _to_code(symbol)
     with engine.connect() as conn:
         row = (
             conn.execute(
                 text(
                     """
-                SELECT id, symbol, name, qty, entry_date, entry_price, peak_price
+                SELECT id, symbol, name, qty, entry_date, entry_price, peak_price,
+                       stop_order_no, stop_branch_no,
+                       stop_trigger_price, stop_limit_price
                 FROM live_trades
                 WHERE strategy_id = :sid AND symbol = :sym AND exit_date IS NULL
                 LIMIT 1
@@ -137,6 +152,7 @@ def record_entry(
     entry_price: float,
 ) -> int:
     """매수 체결 후 호출. 이미 open trade가 있으면 무시(중복 방지)."""
+    symbol = _to_code(symbol)  # 6자리 코드로 통일
     with engine.begin() as conn:
         existing = conn.execute(
             text(
@@ -269,8 +285,11 @@ def sync_with_holdings(
 
     반환: { symbol: trade_dict } — 보유 종목별 open trade 매핑.
     """
-    held = {h["symbol"]: h for h in holdings if int(h.get("qty") or 0) > 0}
-    open_trades = {t["symbol"]: t for t in get_open_trades(strategy_id)}
+    # 형식 통일 — 6자리 코드 기준 매칭. KIS 잔고는 이미 6자리, live_trades 는
+    # 신규 record_entry 부터 6자리지만 과거 데이터에 .KS suffix 가 섞여있을 수 있어
+    # 양쪽 모두 _to_code 적용.
+    held = {_to_code(h["symbol"]): h for h in holdings if int(h.get("qty") or 0) > 0}
+    open_trades = {_to_code(t["symbol"]): t for t in get_open_trades(strategy_id)}
 
     # 1) 잔고에만 있는 종목 → entry 생성
     for symbol, h in held.items():
