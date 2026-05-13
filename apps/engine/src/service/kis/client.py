@@ -327,9 +327,9 @@ class KisClient:
                 "change": float(out.get("prdy_vrss") or 0),
                 "change_rate": float(out.get("prdy_ctrt") or 0),
                 "volume": int(float(out.get("acml_vol") or 0)),
-                # 종목 상태 코드 — 00=정상, 51=관리, 52=정리매매, 53=투자위험,
-                # 54=투자경고, 55=매매정지, 56=투자주의. 매수 직전 체크용.
-                "status_code": (out.get("iscd_stat_cls_code") or "").strip(),
+                # 시장 경고 코드 (KIS) — 00=정상, 01=투자주의, 02=투자경고, 03=투자위험.
+                # iscd_stat_cls_code 는 정상 종목도 비-"00" 값을 갖는 경우가 많아 신뢰성 낮음.
+                "market_warn_code": (out.get("mrkt_warn_cls_code") or "").strip(),
             }
 
         return self._retry_on_token_expired(_do)

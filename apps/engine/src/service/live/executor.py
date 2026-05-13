@@ -67,11 +67,11 @@ def _get_yesterday_close(symbol: str) -> Optional[float]:
 
 
 def _today_quote_info(symbol: str, kis: KisClient) -> Optional[dict[str, Any]]:
-    """오늘 시가 갭 + 종목 상태 코드. 데이터 없으면 None.
+    """오늘 시가 갭 + 시장 경고 코드. 데이터 없으면 None.
 
-    반환: {"gap_pct": float, "status_code": str}
+    반환: {"gap_pct": float, "market_warn_code": str}
       gap_pct: 오늘 시가가 어제 종가 대비 몇 %.
-      status_code: KIS iscd_stat_cls_code — 00=정상, 51~56=위험/정지.
+      market_warn_code: KIS mrkt_warn_cls_code — 00=정상, 01=주의, 02=경고, 03=위험.
 
     KIS rate limit (EGW00201)에 걸리면 1회 재시도.
     """
@@ -97,13 +97,13 @@ def _today_quote_info(symbol: str, kis: KisClient) -> Optional[dict[str, Any]]:
         return None
     return {
         "gap_pct": (open_price / yesterday_close - 1) * 100,
-        "status_code": quote.get("status_code") or "",
+        "market_warn_code": quote.get("market_warn_code") or "",
     }
 
 
-# 매수 차단할 KIS 종목 상태 코드 — 관리/정리매매/투자위험/경고/매매정지/주의.
-# 빈 문자열 또는 "00" 은 정상이라 매수 허용.
-KIS_RISKY_STATUS_CODES = {"51", "52", "53", "54", "55", "56"}
+# 매수 차단할 KIS 시장경고 코드 — 01 투자주의 / 02 투자경고 / 03 투자위험.
+# 00 또는 빈 문자열은 정상이라 매수 허용.
+KIS_RISKY_WARN_CODES = {"01", "02", "03"}
 
 
 def _to_code(symbol: str) -> str:
@@ -444,9 +444,9 @@ def run_once(dry_run: bool = False, mode: str = "paper") -> dict[str, Any]:
         if info is None:
             print(f"   ⚠️  {label}: 시가 데이터 없음 → 스킵")
             continue
-        # 관리/투자위험/매매정지 등 — 매수 금지.
-        if info["status_code"] in KIS_RISKY_STATUS_CODES:
-            print(f"   🚧 {label}: 위험종목 (KIS status={info['status_code']}) → 스킵")
+        # 투자주의/경고/위험 — 매수 금지.
+        if info["market_warn_code"] in KIS_RISKY_WARN_CODES:
+            print(f"   🚧 {label}: 위험종목 (KIS warn={info['market_warn_code']}) → 스킵")
             continue
         gap = info["gap_pct"]
         if abs(gap) > GAP_FILTER_PCT:
