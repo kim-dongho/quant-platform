@@ -67,11 +67,15 @@ def _get_yesterday_close(symbol: str) -> Optional[float]:
 
 
 def _today_quote_info(symbol: str, kis: KisClient) -> Optional[dict[str, Any]]:
-    """오늘 시가 갭 + 시장 경고 코드. 데이터 없으면 None.
+    """현재가 갭 + 시장 경고 코드 + 현재가. 데이터 없으면 None.
 
-    반환: {"gap_pct": float, "market_warn_code": str}
-      gap_pct: 오늘 시가가 어제 종가 대비 몇 %.
+    반환: {"gap_pct": float, "market_warn_code": str, "current_price": float}
+      gap_pct: 현재가가 어제 종가 대비 몇 %.
       market_warn_code: KIS mrkt_warn_cls_code — 00=정상, 01=주의, 02=경고, 03=위험.
+      current_price: 호출 시점 현재가 — buy phase 의 qty/limit/stop reference 기준.
+
+    cron 시점이 15:15 (정규장 마감 직전) 이라 "시가 갭" 보다 "현재가 갭" 이 의미 있다.
+    오늘 시가로만 필터하면 09:00 이후 종일 빠진 종목을 거르지 못함.
 
     KIS rate limit (EGW00201)에 걸리면 1회 재시도.
     """
@@ -92,12 +96,13 @@ def _today_quote_info(symbol: str, kis: KisClient) -> Optional[dict[str, Any]]:
     else:
         return None
 
-    open_price = float(quote.get("open") or 0)
-    if open_price <= 0:
+    current_price = float(quote.get("price") or 0)
+    if current_price <= 0:
         return None
     return {
-        "gap_pct": (open_price / yesterday_close - 1) * 100,
+        "gap_pct": (current_price / yesterday_close - 1) * 100,
         "market_warn_code": quote.get("market_warn_code") or "",
+        "current_price": current_price,
     }
 
 
@@ -427,7 +432,10 @@ def run_once(dry_run: bool = False, mode: str = "paper") -> dict[str, Any]:
     ]
     print(f"   → 후보 {len(raw_candidates)}개 (보유 제외, buffer={candidate_buffer})")
 
-    # ─── 3. 시가 갭 필터 ─────────────────────────────────────
+    # ─── 3. 현재가 갭 필터 ─────────────────────────────────────
+    # 갭 = (현재가 / 어제 종가 - 1) * 100. cron 시점이 15:15 라 "오늘 시가" 가 아닌
+    # "현재가" 기준 갭이 의미 있음 — 시가 갭 작아도 종일 빠진 종목은 거르지 못하니까.
+    # 같은 필터로 종목 선정 + 현재가로 qty/limit/stop reference 모두 통일.
     selected: list[tuple[dict[str, Any], float]] = []
     # raw_candidates 전체를 순회하되 selected 가 빈 슬롯만큼 차면 즉시 중단.
     # 이전 구현은 open_slots*3 으로만 잘라서 봤는데, 갭 초과 종목이 그 안에 몰리면
@@ -442,7 +450,7 @@ def run_once(dry_run: bool = False, mode: str = "paper") -> dict[str, Any]:
         label = _label(symbol, c.get("company_name"))
         info = _today_quote_info(symbol, kis)
         if info is None:
-            print(f"   ⚠️  {label}: 시가 데이터 없음 → 스킵")
+            print(f"   ⚠️  {label}: 현재가 데이터 없음 → 스킵")
             continue
         # 투자주의/경고/위험 — 매수 금지.
         if info["market_warn_code"] in KIS_RISKY_WARN_CODES:
@@ -450,8 +458,11 @@ def run_once(dry_run: bool = False, mode: str = "paper") -> dict[str, Any]:
             continue
         gap = info["gap_pct"]
         if abs(gap) > GAP_FILTER_PCT:
-            print(f"   🚫 {label}: 시가 갭 {gap:+.2f}% (>±{GAP_FILTER_PCT}%) → 스킵")
+            print(f"   🚫 {label}: 현재가 갭 {gap:+.2f}% (>±{GAP_FILTER_PCT}%) → 스킵")
             continue
+        # screener 의 price (어제 종가) 를 KIS 현재가로 교체 — 갭 필터·qty·limit·
+        # stop reference 모두 현재가 기준으로 통일.
+        c["price"] = info["current_price"]
         selected.append((c, gap))
 
     # ─── 4. 매수 주문 ────────────────────────────────────────
