@@ -36,9 +36,12 @@ from src.service.live.trades import (
 from src.service.backtest import ExitPolicy
 from src.service.factor import run_screen
 
-# 시가 갭이 이 이상이면 진입 스킵 (양방향).
-# 어제 종가 시그널 ↔ 실제 진입가 괴리를 줄이는 가장 효과적인 필터.
-GAP_FILTER_PCT = 5.0
+# 현재가 갭 필터 — 비대칭. 하방은 시그널 부정 (악재 가능) 이라 좁게,
+# 상방은 모멘텀 가속 (시장이 시그널 확인) 이라 넓게 허용. 양방향 ±5% 로 잡으면
+# 모멘텀 상위 종목의 강한 갭업도 다 막혀 전략 정신과 모순.
+# 다만 무한 허용은 +15%+ 폭등의 평균회귀 위험 있어 상한 둠.
+GAP_DOWN_LIMIT_PCT = 5.0  # 갭 < -5% → 스킵
+GAP_UP_LIMIT_PCT = 15.0  # 갭 > +15% → 스킵
 
 # KIS 모의계좌 초당 거래건수 제한이 2건이라 호출 사이에 짧은 sleep 필요.
 # 0.5초면 안전하게 초당 2건 이내, 30종목 시가 조회 시 약 15초 추가 소요.
@@ -457,8 +460,11 @@ def run_once(dry_run: bool = False, mode: str = "paper") -> dict[str, Any]:
             print(f"   🚧 {label}: 위험종목 (KIS warn={info['market_warn_code']}) → 스킵")
             continue
         gap = info["gap_pct"]
-        if abs(gap) > GAP_FILTER_PCT:
-            print(f"   🚫 {label}: 현재가 갭 {gap:+.2f}% (>±{GAP_FILTER_PCT}%) → 스킵")
+        if gap < -GAP_DOWN_LIMIT_PCT or gap > GAP_UP_LIMIT_PCT:
+            print(
+                f"   🚫 {label}: 현재가 갭 {gap:+.2f}% "
+                f"(허용 -{GAP_DOWN_LIMIT_PCT}% ~ +{GAP_UP_LIMIT_PCT}%) → 스킵"
+            )
             continue
         # screener 의 price (어제 종가) 를 KIS 현재가로 교체 — 갭 필터·qty·limit·
         # stop reference 모두 현재가 기준으로 통일.
