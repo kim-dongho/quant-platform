@@ -327,6 +327,9 @@ class KisClient:
                 "change": float(out.get("prdy_vrss") or 0),
                 "change_rate": float(out.get("prdy_ctrt") or 0),
                 "volume": int(float(out.get("acml_vol") or 0)),
+                # 종목 상태 코드 — 00=정상, 51=관리, 52=정리매매, 53=투자위험,
+                # 54=투자경고, 55=매매정지, 56=투자주의. 매수 직전 체크용.
+                "status_code": (out.get("iscd_stat_cls_code") or "").strip(),
             }
 
         return self._retry_on_token_expired(_do)
@@ -365,13 +368,16 @@ class KisClient:
         else:
             tr_id = "VTTC0802U" if side == "buy" else "VTTC0801U"
 
+        # 지정가 주문은 KRX 호가 단위에 맞춰 내림 — APBK0506 회피.
+        limit_price_int = _floor_to_tick(price) if order_type == "limit" else 0
+
         body = {
             "CANO": self.account_number,
             "ACNT_PRDT_CD": self.account_product,
             "PDNO": code,
             "ORD_DVSN": "01" if order_type == "market" else "00",
             "ORD_QTY": str(qty),
-            "ORD_UNPR": "0" if order_type == "market" else str(int(price)),
+            "ORD_UNPR": "0" if order_type == "market" else str(limit_price_int),
         }
 
         def _do() -> Dict[str, Any]:

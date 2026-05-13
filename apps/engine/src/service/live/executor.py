@@ -50,6 +50,11 @@ KIS_RATE_LIMIT_RETRY_SLEEP_SEC = 1.2
 # 갭다운으로 시초가가 trigger 보다 낮아도 체결 보장.
 STOP_LIMIT_MARGIN_PCT = -2.0
 
+# 매수 지정가 마진 — 어제 종가 × (1 + 이 값) 으로 발주.
+# 갭 필터 ±5% 와 일관 — 그 안에서 움직이는 종목은 체결, 갑자기 +5% 튀어오르면 미체결 (보호).
+# 정규장 시간 (15:15) 에 발주하면 호가창 매물 있어 거의 즉시 체결.
+BUY_LIMIT_MARGIN_PCT = 5.0
+
 
 def _get_yesterday_close(symbol: str) -> Optional[float]:
     """market_data에서 종목의 가장 최근(=어제) 종가."""
@@ -61,8 +66,12 @@ def _get_yesterday_close(symbol: str) -> Optional[float]:
     return float(row[0]) if row and row[0] is not None else None
 
 
-def _today_gap_pct(symbol: str, kis: KisClient) -> Optional[float]:
-    """오늘 시가가 어제 종가 대비 몇 % 인지. 데이터 없으면 None.
+def _today_quote_info(symbol: str, kis: KisClient) -> Optional[dict[str, Any]]:
+    """오늘 시가 갭 + 종목 상태 코드. 데이터 없으면 None.
+
+    반환: {"gap_pct": float, "status_code": str}
+      gap_pct: 오늘 시가가 어제 종가 대비 몇 %.
+      status_code: KIS iscd_stat_cls_code — 00=정상, 51~56=위험/정지.
 
     KIS rate limit (EGW00201)에 걸리면 1회 재시도.
     """
@@ -86,7 +95,15 @@ def _today_gap_pct(symbol: str, kis: KisClient) -> Optional[float]:
     open_price = float(quote.get("open") or 0)
     if open_price <= 0:
         return None
-    return (open_price / yesterday_close - 1) * 100
+    return {
+        "gap_pct": (open_price / yesterday_close - 1) * 100,
+        "status_code": quote.get("status_code") or "",
+    }
+
+
+# 매수 차단할 KIS 종목 상태 코드 — 관리/정리매매/투자위험/경고/매매정지/주의.
+# 빈 문자열 또는 "00" 은 정상이라 매수 허용.
+KIS_RISKY_STATUS_CODES = {"51", "52", "53", "54", "55", "56"}
 
 
 def _to_code(symbol: str) -> str:
@@ -101,11 +118,23 @@ def _label(symbol: str, name: Optional[str]) -> str:
     return symbol
 
 
-def _place_order_with_retry(kis: KisClient, symbol: str, qty: int, side: str) -> bool:
-    """KIS 주문 발송 + rate limit(EGW00201) 시 1회 재시도. 성공 True."""
+def _place_order_with_retry(
+    kis: KisClient,
+    symbol: str,
+    qty: int,
+    side: str,
+    price: Optional[float] = None,
+) -> bool:
+    """KIS 주문 발송 + rate limit(EGW00201) 시 1회 재시도. 성공 True.
+
+    price 가 주어지면 지정가(ORD_DVSN=00), 없으면 시장가(ORD_DVSN=01).
+    매수는 보통 지정가 + 안전 마진으로 — 정규장 즉시 체결 + KIS 매수가능액 검증 정확.
+    매도는 시장가로 — 동시호가 단일가에 무조건 체결.
+    """
+    order_type = "limit" if price is not None and price > 0 else "market"
     for attempt in range(2):
         try:
-            kis.place_order(symbol=symbol, qty=qty, side=side, order_type="market")
+            kis.place_order(symbol=symbol, qty=qty, side=side, order_type=order_type, price=price)
             return True
         except KisError as e:
             if "EGW00201" in str(e) and attempt == 0:
@@ -411,10 +440,15 @@ def run_once(dry_run: bool = False, mode: str = "paper") -> dict[str, Any]:
             time.sleep(KIS_QUOTE_SLEEP_SEC)
         symbol = c["symbol"]
         label = _label(symbol, c.get("company_name"))
-        gap = _today_gap_pct(symbol, kis)
-        if gap is None:
+        info = _today_quote_info(symbol, kis)
+        if info is None:
             print(f"   ⚠️  {label}: 시가 데이터 없음 → 스킵")
             continue
+        # 관리/투자위험/매매정지 등 — 매수 금지.
+        if info["status_code"] in KIS_RISKY_STATUS_CODES:
+            print(f"   🚧 {label}: 위험종목 (KIS status={info['status_code']}) → 스킵")
+            continue
+        gap = info["gap_pct"]
         if abs(gap) > GAP_FILTER_PCT:
             print(f"   🚫 {label}: 시가 갭 {gap:+.2f}% (>±{GAP_FILTER_PCT}%) → 스킵")
             continue
@@ -485,7 +519,9 @@ def run_once(dry_run: bool = False, mode: str = "paper") -> dict[str, Any]:
             continue
         if buys and not dry_run:
             time.sleep(KIS_QUOTE_SLEEP_SEC)
-        if _place_order_with_retry(kis, symbol, qty, side="buy"):
+        # 지정가 + 5% 마진 — 정규장 시간 즉시 체결 + KIS 검증 정확 (시장가 +30% 마진 문제 회피).
+        limit_price = price * (1 + BUY_LIMIT_MARGIN_PCT / 100)
+        if _place_order_with_retry(kis, symbol, qty, side="buy", price=limit_price):
             buys.append(record)
             cash -= cost
             trade_id = record_entry(
