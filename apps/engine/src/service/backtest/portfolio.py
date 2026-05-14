@@ -390,8 +390,10 @@ def run_portfolio_backtest(
     if start_date:
         start = start_date
     else:
+        # 디폴트 10년 — 2020 코로나·2022 금리 인상 등 약세장 구간 포함해
+        # momentum crash 같은 장세 의존성을 검증 가능하게.
         start = (
-            datetime.fromisoformat(end).date().replace(year=datetime.fromisoformat(end).year - 3)
+            datetime.fromisoformat(end).date().replace(year=datetime.fromisoformat(end).year - 10)
         ).isoformat()
 
     # 두 큰 SQL fetch 를 병렬로 — 직렬이면 backtest 시작 지연의 큰 부분.
