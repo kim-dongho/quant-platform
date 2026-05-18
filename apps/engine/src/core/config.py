@@ -10,15 +10,41 @@ DB_URL = os.getenv("DB_DSN", "postgresql://user:password@db:5432/quant")
 # ---------------------------------------------------------------------------
 WATCHLIST: List[str] = [
     # 우주/모빌리티
-    "RKLB", "ASTS", "LUNR", "RDW", "SPCE", "JOBY", "ACHR",
+    "RKLB",
+    "ASTS",
+    "LUNR",
+    "RDW",
+    "SPCE",
+    "JOBY",
+    "ACHR",
     # AI/양자
-    "PLTR", "IONQ", "QUBT", "BBAI", "SMCI", "RGTI",
+    "PLTR",
+    "IONQ",
+    "QUBT",
+    "BBAI",
+    "SMCI",
+    "RGTI",
     # 반도체
-    "NVDA", "AMD", "ARM", "TSM", "AVGO", "MU", "SNDK",
-    # 코인/핀테크
-    "MSTR", "COIN", "HOOD",
+    "NVDA",
+    "AMD",
+    "ARM",
+    "TSM",
+    "AVGO",
+    "MU",
+    "SNDK",
+    # 코인/핀테크/마이닝
+    "MSTR",
+    "COIN",
+    "HOOD",
+    "IREN",
     # 빅테크/EV
-    "TSLA", "RIVN", "LCID", "AAPL", "MSFT", "GOOGL", "META",
+    "TSLA",
+    "RIVN",
+    "LCID",
+    "AAPL",
+    "MSFT",
+    "GOOGL",
+    "META",
 ]
 
 # 기존 코드 호환성용 alias
@@ -112,11 +138,13 @@ def _fetch_ishares_holdings_raw(url: str, etf_name: str, retries: int = 3) -> Li
         except requests.exceptions.RequestException as e:
             last_err = e
             if attempt < retries:
-                wait = 2 ** attempt
+                wait = 2**attempt
                 print(f"   ⚠️ attempt {attempt} failed ({e}); retrying in {wait}s...")
                 _time.sleep(wait)
             else:
-                raise RuntimeError(f"Failed to fetch {etf_name} after {retries} attempts") from last_err
+                raise RuntimeError(
+                    f"Failed to fetch {etf_name} after {retries} attempts"
+                ) from last_err
 
     lines = r.text.splitlines()
     header_idx = next((i for i, line in enumerate(lines) if line.startswith("Ticker,")), None)
@@ -128,7 +156,7 @@ def _fetch_ishares_holdings_raw(url: str, etf_name: str, retries: int = 3) -> Li
     name_i = header_cols.index("Name") if "Name" in header_cols else 1
 
     rows: List[Dict[str, str]] = []
-    for line in lines[header_idx + 1:]:
+    for line in lines[header_idx + 1 :]:
         if not line.strip():
             break
         try:
@@ -157,22 +185,51 @@ def _fetch_ishares_etf_holdings(url: str, etf_name: str, retries: int = 3) -> Li
 
 @lru_cache(maxsize=1)
 def fetch_russell1000() -> List[str]:
-    """iShares IWB ETF (Russell 1000 대형주 추종) holdings CSV."""
-    url = (
-        "https://www.ishares.com/us/products/239707/ishares-russell-1000-etf/"
-        "?fileType=csv&fileName=IWB_holdings&dataType=fund"
-    )
-    return _fetch_ishares_etf_holdings(url, "Russell 1000 (IWB)")
+    """Wikipedia 'Russell 1000 Index' 테이블에서 종목 추출. iShares CSV fallback."""
+    import pandas as pd
+    from io import StringIO
+
+    # 1차: Wikipedia (안정적)
+    try:
+        print("📥 Fetching Russell 1000 constituents from Wikipedia...")
+        html = _fetch_wiki_html("https://en.wikipedia.org/wiki/Russell_1000_Index")
+        tables = pd.read_html(StringIO(html))
+        for t in tables:
+            if len(t) > 500 and "Symbol" in t.columns:
+                result = sorted({_normalize_ticker(str(s)) for s in t["Symbol"].astype(str) if s})
+                print(f"   → {len(result)} Russell 1000 symbols (Wikipedia)")
+                return result
+    except Exception as e:
+        print(f"   ⚠️ Wikipedia Russell 1000 failed: {e}")
+
+    # 2차: iShares CSV (Cloudflare 차단 시 실패 가��)
+    try:
+        url = (
+            "https://www.ishares.com/us/products/239707/ishares-russell-1000-etf/"
+            "?fileType=csv&fileName=IWB_holdings&dataType=fund"
+        )
+        return _fetch_ishares_etf_holdings(url, "Russell 1000 (IWB)")
+    except Exception as e:
+        print(f"   ⚠️ iShares Russell 1000 also failed: {e}")
+
+    # 3차: SP500 ∪ NASDAQ100 으로 대체
+    print("   ⚠️ Falling back to SP500 ∪ NASDAQ100 as Russell 1000 proxy")
+    return sorted(set(fetch_sp500()) | set(fetch_nasdaq100()))
 
 
 @lru_cache(maxsize=1)
 def fetch_russell2000() -> List[str]:
-    """iShares IWM ETF (Russell 2000 소형주 추종) holdings CSV."""
-    url = (
-        "https://www.ishares.com/us/products/239710/ishares-russell-2000-etf/"
-        "?fileType=csv&fileName=IWM_holdings&dataType=fund"
-    )
-    return _fetch_ishares_etf_holdings(url, "Russell 2000 (IWM)")
+    """iShares IWM ETF (Russell 2000 소형주 추종) holdings CSV. 실패 시 빈 리스트."""
+    try:
+        url = (
+            "https://www.ishares.com/us/products/239710/ishares-russell-2000-etf/"
+            "?fileType=csv&fileName=IWM_holdings&dataType=fund"
+        )
+        return _fetch_ishares_etf_holdings(url, "Russell 2000 (IWM)")
+    except Exception as e:
+        print(f"   ⚠️ Russell 2000 fetch failed: {e}")
+        print("   → Russell 2000 will be empty (R1000 + NDX100 still covers large/mid caps)")
+        return []
 
 
 def fetch_russell3000() -> List[str]:
@@ -281,12 +338,7 @@ def get_all_ingest_universe() -> List[str]:
     미국: Russell 1000 ∪ Russell 2000 ∪ NASDAQ 100 ∪ SPY (R3000 커버 + ADR 보충 + 벤치마크)
     국내: KRX 350 (KOSPI 200 + KOSDAQ 150)
     """
-    us = (
-        set(fetch_russell1000())
-        | set(fetch_russell2000())
-        | set(fetch_nasdaq100())
-        | {"SPY"}
-    )
+    us = set(fetch_russell1000()) | set(fetch_russell2000()) | set(fetch_nasdaq100()) | {"SPY"}
     kr = set(fetch_krx350())
     return sorted(us | kr)
 
@@ -333,10 +385,7 @@ def get_company_names_map() -> Dict[str, str]:
     try:
         html = _fetch_wiki_html("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies")
         df = pd.read_html(StringIO(html))[0]
-        _merge(
-            (_normalize_ticker(str(s)), str(n))
-            for s, n in zip(df["Symbol"], df["Security"])
-        )
+        _merge((_normalize_ticker(str(s)), str(n)) for s, n in zip(df["Symbol"], df["Security"]))
     except Exception as e:
         print(f"   ⚠️ SP500 Wiki names fetch skipped: {e}")
 
@@ -348,8 +397,7 @@ def get_company_names_map() -> Dict[str, str]:
             cols = set(map(str, t.columns))
             if "Ticker" in cols and "Company" in cols:
                 _merge(
-                    (_normalize_ticker(str(s)), str(n))
-                    for s, n in zip(t["Ticker"], t["Company"])
+                    (_normalize_ticker(str(s)), str(n)) for s, n in zip(t["Ticker"], t["Company"])
                 )
                 break
     except Exception as e:
