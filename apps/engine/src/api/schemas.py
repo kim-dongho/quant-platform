@@ -59,6 +59,10 @@ class DiscoverRequest(BaseModel):
     n_clauses: Literal[1, 2] = 1
     top_n: int = 5
     exit_policy: Optional[ExitPolicyModel] = None
+    use_walkforward: bool = True
+    wf_window_months: int = 24
+    wf_step_months: int = 6
+    wf_top_n_candidates: int = 30
 
 
 class FactorPortfolioBacktestRequest(BaseModel):

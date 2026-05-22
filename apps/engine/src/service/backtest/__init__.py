@@ -7,6 +7,7 @@ from src.service.backtest.discover import (
     DEFAULT_PERCENTILES,
     discover,
     discover_single_clause,
+    discover_with_walkforward,
 )
 from src.service.backtest.factor_portfolio import (
     DEFAULT_FACTOR_DIRS,
@@ -42,6 +43,7 @@ __all__ = [
     "DEFAULT_OPS",
     "DEFAULT_PERCENTILES",
     "DEFAULT_EXIT_POLICY",
+    "discover_with_walkforward",
     "factor_portfolio_backtest",
     "compute_composite_scores",
     "DEFAULT_FACTOR_DIRS",

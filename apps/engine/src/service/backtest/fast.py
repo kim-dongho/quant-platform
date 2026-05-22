@@ -298,10 +298,13 @@ def _compute_metrics(
         else {"alpha": 0.0, "beta": 0.0, "excess_cagr": 0.0, "benchmark_cagr": 0.0}
     )
 
+    calmar = _safe_float(cagr / abs(mdd)) if mdd != 0 else 0.0
+
     return {
         "cagr": _safe_float(cagr),
         "mdd": _safe_float(mdd),
         "sharpe": _safe_float(sharpe),
+        "calmar": calmar,
         "num_trades": n,
         "win_rate": _safe_float(win_rate),
         "avg_hold_days": _safe_float(avg_hold),

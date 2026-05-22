@@ -21,6 +21,7 @@ from src.api.schemas import (
 from src.core.database import engine
 from src.service.backtest import (
     discover,
+    discover_with_walkforward,
     factor_portfolio_backtest,
     run_portfolio_backtest,
 )
@@ -88,7 +89,7 @@ def factor_portfolio_backtest_api(req: FactorPortfolioBacktestRequest):
 def discover_portfolio_api(req: DiscoverRequest):
     """동기 grid search — 백워드 호환용. progress가 필요하면 /discover/start 사용."""
     try:
-        return discover(
+        common = dict(
             universe=req.universe,
             factors=req.factors,
             ops=req.ops,
@@ -101,6 +102,14 @@ def discover_portfolio_api(req: DiscoverRequest):
             top_n=req.top_n,
             exit_policy=exit_policy_to_dict(req.exit_policy),
         )
+        if req.use_walkforward:
+            return discover_with_walkforward(
+                **common,
+                top_n_candidates=req.wf_top_n_candidates,
+                window_months=req.wf_window_months,
+                step_months=req.wf_step_months,
+            )
+        return discover(**common)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -144,7 +153,18 @@ def _run_discover_job(job_id: str, params: Dict[str, Any]) -> None:
             return bool(job and job.get("cancel_requested"))
 
     try:
-        result = discover(progress_cb=progress, should_cancel=should_cancel, **params)
+        use_wf = params.pop("use_walkforward", True)
+        wf_kwargs = {
+            "top_n_candidates": params.pop("wf_top_n_candidates", 30),
+            "window_months": params.pop("wf_window_months", 24),
+            "step_months": params.pop("wf_step_months", 6),
+        }
+        if use_wf:
+            result = discover_with_walkforward(
+                progress_cb=progress, should_cancel=should_cancel, **wf_kwargs, **params
+            )
+        else:
+            result = discover(progress_cb=progress, should_cancel=should_cancel, **params)
         with _DISCOVER_JOBS_LOCK:
             job = _DISCOVER_JOBS.get(job_id)
             if job is not None:
@@ -206,6 +226,10 @@ def discover_start(req: DiscoverRequest, background: BackgroundTasks):
         "n_clauses": req.n_clauses,
         "top_n": req.top_n,
         "exit_policy": exit_policy_to_dict(req.exit_policy),
+        "use_walkforward": req.use_walkforward,
+        "wf_top_n_candidates": req.wf_top_n_candidates,
+        "wf_window_months": req.wf_window_months,
+        "wf_step_months": req.wf_step_months,
     }
     with _DISCOVER_JOBS_LOCK:
         _DISCOVER_JOBS[job_id] = {
