@@ -409,18 +409,15 @@ def discover_with_walkforward(
             break
 
         clauses = cand["clauses"]
-        label = _format_clauses(clauses)
         window_metrics: List[Dict[str, float]] = []
 
         for wi, (ws, we) in enumerate(windows):
             eval_count += 1
             if progress_cb:
-                progress_cb(eval_count, total_evals, f"WF {ci+1}/{len(candidates)} w{wi+1}")
+                progress_cb(eval_count, total_evals, f"WF {ci + 1}/{len(candidates)} w{wi + 1}")
 
             # 윈도우 내 train/test split
-            train_start, train_end, test_start, test_end = _split_train_test(
-                ws, we, train_ratio
-            )
+            train_start, train_end, test_start, test_end = _split_train_test(ws, we, train_ratio)
 
             try:
                 train_cache = full_cache.slice(train_start, train_end)
@@ -440,15 +437,17 @@ def discover_with_walkforward(
                 if test_m.get("num_trades", 0) < 1:
                     continue
 
-                window_metrics.append({
-                    "window": f"{ws}~{we}",
-                    "test_calmar": test_m.get("calmar", 0.0),
-                    "test_cagr": test_m.get("cagr", 0.0),
-                    "test_mdd": test_m.get("mdd", 0.0),
-                    "test_sharpe": test_m.get("sharpe", 0.0),
-                    "test_alpha": test_m.get("alpha", 0.0),
-                    "test_trades": test_m.get("num_trades", 0),
-                })
+                window_metrics.append(
+                    {
+                        "window": f"{ws}~{we}",
+                        "test_calmar": test_m.get("calmar", 0.0),
+                        "test_cagr": test_m.get("cagr", 0.0),
+                        "test_mdd": test_m.get("mdd", 0.0),
+                        "test_sharpe": test_m.get("sharpe", 0.0),
+                        "test_alpha": test_m.get("alpha", 0.0),
+                        "test_trades": test_m.get("num_trades", 0),
+                    }
+                )
             except Exception:
                 continue
 
@@ -462,17 +461,19 @@ def discover_with_walkforward(
         mean_mdd = statistics.mean([w["test_mdd"] for w in window_metrics])
         mean_sharpe = statistics.mean([w["test_sharpe"] for w in window_metrics])
 
-        wf_results.append({
-            **cand,  # 1단계 train/test 메트릭 유지
-            "wf_score": round(wf_score, 4),
-            "wf_mean_calmar": round(mean_calmar, 4),
-            "wf_mean_cagr": round(mean_cagr, 4),
-            "wf_mean_mdd": round(mean_mdd, 4),
-            "wf_mean_sharpe": round(mean_sharpe, 4),
-            "wf_windows_passed": len(window_metrics),
-            "wf_windows_total": len(windows),
-            "wf_window_details": window_metrics,
-        })
+        wf_results.append(
+            {
+                **cand,  # 1단계 train/test 메트릭 유지
+                "wf_score": round(wf_score, 4),
+                "wf_mean_calmar": round(mean_calmar, 4),
+                "wf_mean_cagr": round(mean_cagr, 4),
+                "wf_mean_mdd": round(mean_mdd, 4),
+                "wf_mean_sharpe": round(mean_sharpe, 4),
+                "wf_windows_passed": len(window_metrics),
+                "wf_windows_total": len(windows),
+                "wf_window_details": window_metrics,
+            }
+        )
 
     # wf_score 기준 최종 정렬
     wf_results.sort(key=lambda r: r["wf_score"], reverse=True)
