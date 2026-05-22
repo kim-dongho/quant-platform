@@ -19,6 +19,22 @@ CREATE TABLE IF NOT EXISTS market_data (
 
 CREATE INDEX IF NOT EXISTS ix_symbol_time_desc ON market_data (symbol, time DESC);
 
+-- 1시간봉 시세 (multi-timeframe 차트용). yfinance interval=1h, 최대 730일.
+-- 4시간봉은 별도 저장 안 하고 SELECT 시 4 봉씩 aggregate 해서 사용.
+CREATE TABLE IF NOT EXISTS candles_1h (
+    time TIMESTAMPTZ NOT NULL,
+    symbol VARCHAR(20) NOT NULL,
+    open DOUBLE PRECISION,
+    high DOUBLE PRECISION,
+    low DOUBLE PRECISION,
+    close DOUBLE PRECISION,
+    volume BIGINT,
+    CONSTRAINT candles_1h_pk PRIMARY KEY (time, symbol),
+    CONSTRAINT fk_candles_1h_stocks FOREIGN KEY (symbol) REFERENCES stocks (symbol)
+);
+
+CREATE INDEX IF NOT EXISTS ix_candles_1h_symbol_time_desc ON candles_1h (symbol, time DESC);
+
 -- 일자별 종목별 팩터 스냅샷 (포트폴리오 스크리닝용)
 CREATE TABLE IF NOT EXISTS factors (
     time TIMESTAMPTZ NOT NULL,
