@@ -2,7 +2,13 @@
 
 import { useEffect, useRef } from 'react';
 
-import type { CandlestickData, IChartApi, SeriesMarker, Time } from 'lightweight-charts';
+import type {
+  CandlestickData,
+  IChartApi,
+  LogicalRange,
+  SeriesMarker,
+  Time,
+} from 'lightweight-charts';
 import {
   CandlestickSeries,
   ColorType,
@@ -15,6 +21,17 @@ import {
 
 import { formatPrice, getCurrency } from '@/shared/lib/format-price';
 
+import type { Timeframe } from '../api/stocks-api';
+import {
+  computeAndrewsPitchfork,
+  computeDonchianChannel,
+  computeHHHLTrendline,
+  computeHorizontalLevels,
+  computeKeltnerChannel,
+  computeLinearRegressionChannel,
+  computePivotTrendlines,
+  computeStandardErrorChannel,
+} from '../lib/channels';
 import type { ChartOptions, MarketData } from '../model/stocks-common';
 
 interface Props {
@@ -23,7 +40,17 @@ interface Props {
   visibleIndicators: ChartOptions;
   markers?: SeriesMarker<string>[];
   symbol?: string;
+  // 채널 기간을 일봉 6개월 = 130 거래일 기준으로 timeframe 환산.
+  // 같은 시간 범위 (≈6개월) 를 timeframe 별 다른 해상도로 보기 위함.
+  timeframe?: Timeframe;
 }
+
+// 일봉 6개월 (130 거래일) 시간 범위에 해당하는 봉 수 — multi-timeframe 정합성.
+const CHANNEL_PERIOD_BY_TIMEFRAME: Record<Timeframe, number> = {
+  '1d': 130,
+  '4h': 260, // 130 × 2 (US 정규장 4h 봉 약 2개/day)
+  '1h': 900, // 130 × ~7 (US 정규장 6.5h)
+};
 
 export const StockChart = ({
   data,
@@ -31,12 +58,21 @@ export const StockChart = ({
   visibleIndicators,
   markers = [],
   symbol,
+  timeframe = '1d',
 }: Props) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
+  // 채널 토글 시 차트가 재생성돼도 zoom/pan 위치를 유지하기 위한 보관소.
+  // symbol/timeframe 이 바뀌면 무효화 (다른 데이터라 같은 range 가 의미 없음).
+  const lastRangeRef = useRef<LogicalRange | null>(null);
+  const lastContextRef = useRef<string>('');
 
   useEffect(() => {
     if (!chartContainerRef.current || data.length === 0) return;
+
+    const currentContext = `${symbol}|${timeframe}`;
+    const sameContext = lastContextRef.current === currentContext;
+    lastContextRef.current = currentContext;
 
     // 1. 하단 패널(Pane) 개수 계산
     // RSI와 MACD가 켜져 있는지 확인하여 필요한 하단 여백을 계산합니다.
@@ -201,6 +237,200 @@ export const StockChart = ({
       );
     }
 
+    // 채널 series 는 가격 series 의 autoscale 결정에서 제외 — 안 그러면
+    // ±2σ band 나 trendline 연장선이 차트 위/아래로 튀어나와 가격 본체가
+    // 압축돼 보임. null 반환 = 이 series 는 y축 자동 스케일에 기여하지 않음.
+    const noAutoscale = { autoscaleInfoProvider: () => null };
+
+    // (5) Linear Regression Channel — 일봉 6개월 환산 봉수 (timeframe 별) OLS 의
+    // ±1σ / ±2σ / ±3σ 실선. multi-timeframe 정합성 — 같은 시간 범위 (~6개월) 를
+    // 다른 해상도로. 1σ = 정상 (68%), 2σ = 확장 (95%), 3σ = 극단 (99.7%).
+    // 1σ 가 가장 굵게, 외곽으로 갈수록 얇게.
+    if (visibleIndicators.lrChannel) {
+      const channelPeriod = CHANNEL_PERIOD_BY_TIMEFRAME[timeframe];
+      const lr1 = computeLinearRegressionChannel(data, channelPeriod, 1);
+      const lr2 = computeLinearRegressionChannel(data, channelPeriod, 2);
+      const lr3 = computeLinearRegressionChannel(data, channelPeriod, 3);
+      if (lr1.upper.length > 0) {
+        const mkLR = (width: 1 | 2) =>
+          chart.addSeries(LineSeries, {
+            color: '#a855f7',
+            lineWidth: width,
+            lineStyle: LineStyle.Solid,
+            priceScaleId: 'right',
+            priceFormat: currencyPriceFormat,
+            ...noAutoscale,
+          });
+        const u1 = mkLR(2);
+        const l1 = mkLR(2);
+        const u2 = mkLR(1);
+        const l2 = mkLR(1);
+        const u3 = mkLR(1);
+        const l3 = mkLR(1);
+        u1.setData(lr1.upper.map((p) => ({ time: p.time as Time, value: p.value })));
+        l1.setData(lr1.lower.map((p) => ({ time: p.time as Time, value: p.value })));
+        u2.setData(lr2.upper.map((p) => ({ time: p.time as Time, value: p.value })));
+        l2.setData(lr2.lower.map((p) => ({ time: p.time as Time, value: p.value })));
+        u3.setData(lr3.upper.map((p) => ({ time: p.time as Time, value: p.value })));
+        l3.setData(lr3.lower.map((p) => ({ time: p.time as Time, value: p.value })));
+      }
+    }
+
+    // (5b) Standard Error Channel — 회귀선 ±2×SE (=σ/√n) 분홍 실선.
+    // LR ±σ 가 가격 변동 범위라면 이건 회귀선 자체의 신뢰구간.
+    // 매우 좁아서 추세 정확도가 한눈에 — n 이 클수록 더 좁아짐.
+    if (visibleIndicators.standardError) {
+      const channelPeriod = CHANNEL_PERIOD_BY_TIMEFRAME[timeframe];
+      const se = computeStandardErrorChannel(data, channelPeriod, 2);
+      if (se.upper.length > 0) {
+        const mkSE = () =>
+          chart.addSeries(LineSeries, {
+            color: '#ec4899',
+            lineWidth: 1,
+            lineStyle: LineStyle.Solid,
+            priceScaleId: 'right',
+            priceFormat: currencyPriceFormat,
+            ...noAutoscale,
+          });
+        const u = mkSE();
+        const l = mkSE();
+        u.setData(se.upper.map((p) => ({ time: p.time as Time, value: p.value })));
+        l.setData(se.lower.map((p) => ({ time: p.time as Time, value: p.value })));
+      }
+    }
+
+    // (6) Donchian Channel — rolling 60봉 high/low
+    if (visibleIndicators.donchian) {
+      const d = computeDonchianChannel(data, 60);
+      if (d.upper.length > 0) {
+        const mkD = () =>
+          chart.addSeries(LineSeries, {
+            color: '#f97316',
+            lineWidth: 1,
+            priceScaleId: 'right',
+            priceFormat: currencyPriceFormat,
+            ...noAutoscale,
+          });
+        const u = mkD();
+        const l = mkD();
+        u.setData(d.upper.map((p) => ({ time: p.time as Time, value: p.value })));
+        l.setData(d.lower.map((p) => ({ time: p.time as Time, value: p.value })));
+      }
+    }
+
+    // (6b) Keltner Channel — EMA20 ± 2×ATR (변동성 기반 청록).
+    // σ 와 다른 정보: ATR 가 고가-저가 범위 반영해 갭/whipsaw 에 robust.
+    if (visibleIndicators.keltner) {
+      const kel = computeKeltnerChannel(data, 20, 20, 2);
+      if (kel.upper.length > 0) {
+        const mkK = (style: LineStyle, width: 1 | 2) =>
+          chart.addSeries(LineSeries, {
+            color: '#0ea5e9',
+            lineWidth: width,
+            lineStyle: style,
+            priceScaleId: 'right',
+            priceFormat: currencyPriceFormat,
+            ...noAutoscale,
+          });
+        const u = mkK(LineStyle.Solid, 1);
+        const m = mkK(LineStyle.Dotted, 1);
+        const l = mkK(LineStyle.Solid, 1);
+        u.setData(kel.upper.map((p) => ({ time: p.time as Time, value: p.value })));
+        m.setData(kel.mid.map((p) => ({ time: p.time as Time, value: p.value })));
+        l.setData(kel.lower.map((p) => ({ time: p.time as Time, value: p.value })));
+      }
+    }
+
+    // (6c) Andrews' Pitchfork — 3 swing point 기반 미디언 + 평행 채널 (황갈).
+    // 미디언선이 magnet 역할 — 가격이 자주 회귀하는 중심.
+    if (visibleIndicators.pitchfork) {
+      const pf = computeAndrewsPitchfork(data, 250, 5);
+      if (pf.median.length > 0) {
+        const mkPF = (width: 1 | 2) =>
+          chart.addSeries(LineSeries, {
+            color: '#d97706',
+            lineWidth: width,
+            lineStyle: LineStyle.Solid,
+            priceScaleId: 'right',
+            priceFormat: currencyPriceFormat,
+            ...noAutoscale,
+          });
+        const u = mkPF(1);
+        const m = mkPF(2);
+        const l = mkPF(1);
+        u.setData(pf.upper.map((p) => ({ time: p.time as Time, value: p.value })));
+        m.setData(pf.median.map((p) => ({ time: p.time as Time, value: p.value })));
+        l.setData(pf.lower.map((p) => ({ time: p.time as Time, value: p.value })));
+      }
+    }
+
+    // (6d) HH/HL Trendline — Dow 이론. 단조 증가만 인정해 추세 정의.
+    // 녹색 = HH 상단 trendline, 적색 = HL 하단 (uptrend 시 둘 다 살아있음).
+    if (visibleIndicators.hhhl) {
+      const hh = computeHHHLTrendline(data, 250, 5);
+      const mkHH = (color: string) =>
+        chart.addSeries(LineSeries, {
+          color,
+          lineWidth: 2,
+          lineStyle: LineStyle.Solid,
+          priceScaleId: 'right',
+          priceFormat: currencyPriceFormat,
+          ...noAutoscale,
+        });
+      if (hh.hhLine.length > 0) {
+        const r = mkHH('#22c55e');
+        r.setData(hh.hhLine.map((p) => ({ time: p.time as Time, value: p.value })));
+      }
+      if (hh.hlLine.length > 0) {
+        const s = mkHH('#ef4444');
+        s.setData(hh.hlLine.map((p) => ({ time: p.time as Time, value: p.value })));
+      }
+    }
+
+    // (6e) Horizontal S/R levels — 직전 swing high/low 가로 점선.
+    // 채널 돌파 후 가격이 실제로 닿았던 다음 타겟 — "장대양봉 위 어디까지?".
+    if (visibleIndicators.horizontalLevels) {
+      const hl = computeHorizontalLevels(data, 250, 5, 4);
+      const mkLevel = (color: string) =>
+        chart.addSeries(LineSeries, {
+          color,
+          lineWidth: 1,
+          lineStyle: LineStyle.Dotted,
+          priceScaleId: 'right',
+          priceFormat: currencyPriceFormat,
+          ...noAutoscale,
+        });
+      hl.resistanceLevels.forEach((lvl) => {
+        const s = mkLevel('#64748b');
+        s.setData(lvl.map((p) => ({ time: p.time as Time, value: p.value })));
+      });
+      hl.supportLevels.forEach((lvl) => {
+        const s = mkLevel('#64748b');
+        s.setData(lvl.map((p) => ({ time: p.time as Time, value: p.value })));
+      });
+    }
+
+    // (7) Pivot Trendline — 250봉 중 swing high/low 검출 후 최근 2점 연결
+    if (visibleIndicators.pivotTrendline) {
+      const p = computePivotTrendlines(data, 250, 5);
+      const mkP = () =>
+        chart.addSeries(LineSeries, {
+          color: '#14b8a6',
+          lineWidth: 2,
+          priceScaleId: 'right',
+          priceFormat: currencyPriceFormat,
+          ...noAutoscale,
+        });
+      if (p.resistance.length > 0) {
+        const r = mkP();
+        r.setData(p.resistance.map((q) => ({ time: q.time as Time, value: q.value })));
+      }
+      if (p.support.length > 0) {
+        const s = mkP();
+        s.setData(p.support.map((q) => ({ time: q.time as Time, value: q.value })));
+      }
+    }
+
     // 하단 지표 (RSI & MACD) 로직
 
     let currentPaneIndex = 0; // 지표 순서 (아래에서부터 0, 1...)
@@ -281,6 +511,16 @@ export const StockChart = ({
       currentPaneIndex++;
     }
 
+    // 채널 토글로 재생성된 경우 (같은 symbol/timeframe) 이전 zoom 위치 복원.
+    // 종목·timeframe 변경 시엔 lastRange 가 의미 없으므로 skip → fitContent 디폴트.
+    if (sameContext && lastRangeRef.current) {
+      try {
+        chart.timeScale().setVisibleLogicalRange(lastRangeRef.current);
+      } catch {
+        // range 가 데이터 범위 벗어나면 무시
+      }
+    }
+
     // 반응형: 컨테이너 크기 변화에 맞춰 width + height 모두 갱신
     const handleResize = () => {
       if (!chartContainerRef.current) return;
@@ -293,11 +533,17 @@ export const StockChart = ({
     ro.observe(chartContainerRef.current);
     window.addEventListener('resize', handleResize);
     return () => {
+      // cleanup 직전 현재 visible range 저장 — 다음 effect 에서 복원.
+      try {
+        lastRangeRef.current = chart.timeScale().getVisibleLogicalRange();
+      } catch {
+        // 차트 이미 dispose 된 경우 무시
+      }
       ro.disconnect();
       window.removeEventListener('resize', handleResize);
       chart.remove();
     };
-  }, [data, backtestData, visibleIndicators, markers, symbol]);
+  }, [data, backtestData, visibleIndicators, markers, symbol, timeframe]);
 
   return <div ref={chartContainerRef} className="h-full w-full" />;
 };

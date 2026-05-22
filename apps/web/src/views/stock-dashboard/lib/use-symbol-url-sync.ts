@@ -2,18 +2,25 @@
 
 import { useEffect, useRef } from 'react';
 
-import { parseAsString, useQueryStates } from 'nuqs';
+import { parseAsString, parseAsStringLiteral, useQueryStates } from 'nuqs';
+
+import type { Timeframe } from '@/entities/stock/api/stocks-api';
 
 import { useDashboardStore } from '../model/dashboard-store';
 
-const parsers = { symbol: parseAsString };
+const TIMEFRAMES: readonly Timeframe[] = ['1d', '1h', '4h'] as const;
+const parsers = {
+  symbol: parseAsString,
+  tf: parseAsStringLiteral(TIMEFRAMES).withDefault('1d'),
+};
 
-// URL ?symbol=... 와 store.symbol 양방향 동기화. 마운트 시 1회 URL → store,
-// 이후 store 변경 시 URL 업데이트.
+// URL ?symbol=...&tf=1d|1h|4h 와 store 양방향 동기화.
 export const useSymbolUrlSync = () => {
   const [urlParams, setUrlParams] = useQueryStates(parsers, { shallow: true, throttleMs: 300 });
   const symbol = useDashboardStore((s) => s.symbol);
   const setSymbol = useDashboardStore((s) => s.setSymbol);
+  const timeframe = useDashboardStore((s) => s.timeframe);
+  const setTimeframe = useDashboardStore((s) => s.setTimeframe);
 
   const initialized = useRef(false);
   useEffect(() => {
@@ -21,11 +28,14 @@ export const useSymbolUrlSync = () => {
     if (urlParams.symbol && urlParams.symbol !== symbol) {
       setSymbol(urlParams.symbol);
     }
+    if (urlParams.tf && urlParams.tf !== timeframe) {
+      setTimeframe(urlParams.tf);
+    }
     initialized.current = true;
-  }, [urlParams.symbol, symbol, setSymbol]);
+  }, [urlParams.symbol, urlParams.tf, symbol, timeframe, setSymbol, setTimeframe]);
 
   useEffect(() => {
     if (!initialized.current) return;
-    setUrlParams({ symbol });
-  }, [symbol, setUrlParams]);
+    setUrlParams({ symbol, tf: timeframe });
+  }, [symbol, timeframe, setUrlParams]);
 };

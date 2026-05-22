@@ -53,16 +53,17 @@ func getLastTradingDay() (string, error) {
 }
 
 // GetStockHistory godoc
-// @Summary      주식 히스토리 조회
-// @Description  특정 심볼의 회사명과 과거 시세 데이터를 조회합니다. (없으면 자동 수집)
+// @Summary      주식 히스토리 조회 (멀티 타임프레임)
+// @Description  특정 심볼의 회사명과 과거 시세 데이터를 조회합니다. timeframe 으로 1d / 1h / 4h 선택.
 // @Tags         stocks
 // @Accept       json
 // @Produce      json
-// @Param        symbol   path      string  true  "Stock Symbol (e.g., NVDA)"
-// @Success      200      {object}  model.StockHistoryResponse
-// @Failure      400      {object}  map[string]string
-// @Failure      404      {object}  map[string]string
-// @Failure      500      {object}  map[string]string
+// @Param        symbol     path      string  true   "Stock Symbol (e.g., NVDA)"
+// @Param        timeframe  query     string  false  "Timeframe: 1d | 1h | 4h (default 1d)"
+// @Success      200        {object}  model.StockHistoryResponse
+// @Failure      400        {object}  map[string]string
+// @Failure      404        {object}  map[string]string
+// @Failure      500        {object}  map[string]string
 // @Router       /stocks/{symbol}/history [get]
 func GetStockHistory(c *fiber.Ctx) error {
 	symbol := c.Params("symbol")
@@ -70,28 +71,17 @@ func GetStockHistory(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Symbol is required"})
 	}
 
-	db := database.DB
+	timeframe := strings.ToLower(strings.TrimSpace(c.Query("timeframe", "1d")))
+	if timeframe != "1d" && timeframe != "1h" && timeframe != "4h" {
+		return c.Status(400).JSON(fiber.Map{"error": "timeframe must be 1d, 1h, or 4h"})
+	}
 
+	db := database.DB
 	var history []model.MarketData
 
-	db.Table("market_data").
-		Select("DISTINCT ON (time) TO_CHAR(time, 'YYYY-MM-DD') as time, open, high, low, close, volume").
-		Where("symbol = ?", symbol).
-		Order("time ASC").
-		Find(&history)
-
-	// 데이터가 없으면(0건) Python 엔진 호출 (Lazy Loading)
-	if len(history) == 0 {
-		fmt.Printf("🔍 No data for %s in DB. Triggering ingestion...\n", symbol)
-
-		if err := triggerIngestion(symbol); err != nil {
-			fmt.Printf("❌ Ingestion failed: %v\n", err)
-			return c.Status(404).JSON(fiber.Map{
-				"error":   "Symbol not found or data unavailable",
-				"details": err.Error(),
-			})
-		}
-
+	switch timeframe {
+	case "1d":
+		// 일봉 — 기존 동작 유지. 데이터 없으면 lazy ingest.
 		db.Table("market_data").
 			Select("DISTINCT ON (time) TO_CHAR(time, 'YYYY-MM-DD') as time, open, high, low, close, volume").
 			Where("symbol = ?", symbol).
@@ -99,24 +89,63 @@ func GetStockHistory(c *fiber.Ctx) error {
 			Find(&history)
 
 		if len(history) == 0 {
-			return c.Status(500).JSON(fiber.Map{"error": "Data ingested but retrieval failed"})
-		}
-	} else {
-		// 데이터는 있는데 최신 bar가 마지막 마감 세션보다 오래됐으면 백필
-		lastBar := history[len(history)-1].Time
-		if lastSession, err := getLastTradingDay(); err == nil && lastBar < lastSession {
-			fmt.Printf("🔄 Data stale for %s (last bar: %s, last session: %s). Refreshing...\n", symbol, lastBar, lastSession)
-			if ingestErr := triggerIngestion(symbol); ingestErr != nil {
-				fmt.Printf("⚠️ Backfill failed, returning stale data: %v\n", ingestErr)
-			} else {
-				history = history[:0]
-				db.Table("market_data").
-					Select("DISTINCT ON (time) TO_CHAR(time, 'YYYY-MM-DD') as time, open, high, low, close, volume").
-					Where("symbol = ?", symbol).
-					Order("time ASC").
-					Find(&history)
+			fmt.Printf("🔍 No data for %s in DB. Triggering ingestion...\n", symbol)
+			if err := triggerIngestion(symbol); err != nil {
+				fmt.Printf("❌ Ingestion failed: %v\n", err)
+				return c.Status(404).JSON(fiber.Map{
+					"error":   "Symbol not found or data unavailable",
+					"details": err.Error(),
+				})
+			}
+			db.Table("market_data").
+				Select("DISTINCT ON (time) TO_CHAR(time, 'YYYY-MM-DD') as time, open, high, low, close, volume").
+				Where("symbol = ?", symbol).
+				Order("time ASC").
+				Find(&history)
+			if len(history) == 0 {
+				return c.Status(500).JSON(fiber.Map{"error": "Data ingested but retrieval failed"})
+			}
+		} else {
+			// 데이터는 있는데 최신 bar가 마지막 마감 세션보다 오래됐으면 백필
+			lastBar := history[len(history)-1].Time
+			if lastSession, err := getLastTradingDay(); err == nil && lastBar < lastSession {
+				fmt.Printf("🔄 Data stale for %s (last bar: %s, last session: %s). Refreshing...\n", symbol, lastBar, lastSession)
+				if ingestErr := triggerIngestion(symbol); ingestErr != nil {
+					fmt.Printf("⚠️ Backfill failed, returning stale data: %v\n", ingestErr)
+				} else {
+					history = history[:0]
+					db.Table("market_data").
+						Select("DISTINCT ON (time) TO_CHAR(time, 'YYYY-MM-DD') as time, open, high, low, close, volume").
+						Where("symbol = ?", symbol).
+						Order("time ASC").
+						Find(&history)
+				}
 			}
 		}
+
+	case "1h":
+		// 1시간봉 — candles_1h 테이블에서 그대로 반환. ISO 형식 (lightweight-charts 호환).
+		db.Table("candles_1h").
+			Select("TO_CHAR(time, 'YYYY-MM-DD\"T\"HH24:MI:SS') as time, open, high, low, close, volume").
+			Where("symbol = ?", symbol).
+			Order("time ASC").
+			Find(&history)
+
+	case "4h":
+		// 4시간봉 — 1h 봉을 time_bucket('4 hours') 로 aggregate (TimescaleDB first/last 활용).
+		db.Table("candles_1h").
+			Select(`
+				TO_CHAR(time_bucket('4 hours', time), 'YYYY-MM-DD"T"HH24:MI:SS') as time,
+				first(open, time) as open,
+				max(high) as high,
+				min(low) as low,
+				last(close, time) as close,
+				sum(volume) as volume
+			`).
+			Where("symbol = ?", symbol).
+			Group("time_bucket('4 hours', time)").
+			Order("time ASC").
+			Find(&history)
 	}
 
 	var companyName string

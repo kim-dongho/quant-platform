@@ -1,12 +1,16 @@
 import { useQuery } from '@tanstack/react-query';
 
-import { getStockHistory, getStockList, searchStocks } from './stocks-api';
+import { type Timeframe, getStockHistory, getStockList, searchStocks } from './stocks-api';
 
-// 시세 데이터 쿼리
-export const useStockHistoryQuery = (symbol: string, options?: { enabled?: boolean }) => {
+// 시세 데이터 쿼리 — timeframe 별로 query key 분리.
+export const useStockHistoryQuery = (
+  symbol: string,
+  timeframe: Timeframe = '1d',
+  options?: { enabled?: boolean },
+) => {
   return useQuery({
-    queryKey: ['stockHistory', symbol],
-    queryFn: () => getStockHistory(symbol),
+    queryKey: ['stockHistory', symbol, timeframe],
+    queryFn: () => getStockHistory(symbol, timeframe),
     staleTime: 1000 * 60 * 5,
     enabled: !!symbol && (options?.enabled ?? true),
     retry: 1,

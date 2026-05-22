@@ -6,11 +6,18 @@ import type {
   getStockHistoryResponseDto,
 } from '../model/stocks-dto';
 
+export type Timeframe = '1d' | '1h' | '4h';
+
 /**
- * 주식 시세 히스토리 조회
+ * 주식 시세 히스토리 조회 — timeframe 지정 (기본 1d).
  */
-export const getStockHistory = async (symbol: string): Promise<getStockHistoryResponseDto> => {
-  const { data } = await apiClient.get<getStockHistoryResponseDto>(`/stocks/${symbol}/history`);
+export const getStockHistory = async (
+  symbol: string,
+  timeframe: Timeframe = '1d',
+): Promise<getStockHistoryResponseDto> => {
+  const { data } = await apiClient.get<getStockHistoryResponseDto>(`/stocks/${symbol}/history`, {
+    params: { timeframe },
+  });
 
   return data;
 };
