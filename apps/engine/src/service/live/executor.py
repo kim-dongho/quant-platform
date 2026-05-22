@@ -708,17 +708,22 @@ def run_stop_refresh(dry_run: bool = False, mode: str = "paper") -> dict[str, An
         trade = open_trades.get(code)
         if not trade:
             continue  # sync 가 못 잡은 외부 보유분 — 다음 cron 에서 처리
+        label = _label(symbol, h.get("name"))
         if trade.get("stop_order_no"):
-            # KIS 가 당일 유효라 자동 취소했어야 하지만, 혹시 남아있으면 skip.
-            # 다음 작업: cancel 후 재발사로 매일 일관성 보장 가능.
-            print(f"   ⏭️  {_label(symbol, h.get('name'))}: stop_order_no 이미 있음 — skip")
-            continue
+            # KIS 정규주문 (스탑지정가 포함) 은 당일 유효 — 어제 발사된 stop 은
+            # 어제 정규장 마감 시 KIS 쪽에서 자동 취소됐을 가능성 높음. 다만 만약
+            # 남아있으면 같은 종목에 stop 2건 발사되니 cancel 시도. cancel 이 실패해도
+            # (이미 취소/만료) DB 메타만 clear 하고 재발사 진행.
+            if not dry_run:
+                _maybe_cancel_stop(kis, trade)
+                clear_stop_order(int(trade["id"]))
+            print(f"   🔄 {label}: 어제 stop 메타 clear → 재발사")
+            trade["stop_order_no"] = None
         qty = int(h.get("qty") or 0)
         avg_cost = float(h.get("avg_cost") or 0)
         if qty <= 0 or avg_cost <= 0:
             continue
 
-        label = _label(symbol, h.get("name"))
         if dry_run:
             trigger = avg_cost * (1 + policy.stop_loss_pct / 100)
             limit = trigger * (1 + STOP_LIMIT_MARGIN_PCT / 100)
