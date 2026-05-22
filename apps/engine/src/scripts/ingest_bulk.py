@@ -324,6 +324,35 @@ def process_batch(
 
 
 # ---------------------------------------------------------------------------
+# 1시간봉 수집
+# ---------------------------------------------------------------------------
+def _ingest_1h(us_tickers: List[str], batch_size: int = 50) -> None:
+    """미국 종목 1시간봉 일괄 수집. KRX는 yfinance 1h 미지원이라 제외."""
+    from src.service.ingest.yfinance_1h import save_1h_to_db
+
+    h1_start = time.time()
+    ok, fail = 0, 0
+    total = len(us_tickers)
+    progress_every = 50
+    for i, sym in enumerate(us_tickers):
+        if i > 0:
+            time.sleep(0.3)
+        try:
+            n = save_1h_to_db(sym)
+            if n > 0:
+                ok += 1
+        except Exception as e:
+            fail += 1
+            print(f"  ⚠️ 1h {sym}: {e}")
+        if (i + 1) % progress_every == 0 or (i + 1) == total:
+            elapsed = time.time() - h1_start
+            pct = (i + 1) / total * 100
+            eta = (elapsed / (i + 1)) * (total - i - 1) if i + 1 < total else 0
+            print(f"  [{i + 1}/{total}] {pct:.1f}% · {elapsed:.0f}s · ETA {eta / 60:.1f}min")
+    print(f"✅ 1h done: {ok} ok, {fail} fail, {time.time() - h1_start:.0f}s")
+
+
+# ---------------------------------------------------------------------------
 # 진입점
 # ---------------------------------------------------------------------------
 def main():
@@ -348,6 +377,10 @@ def main():
         "--years", type=int, default=DEFAULT_YEARS, help="히스토리 연수 (기본 10, 최소 권장 5)"
     )
     parser.add_argument("--skip-factors", action="store_true", help="factor precompute 스킵")
+    parser.add_argument("--skip-1h", action="store_true", help="1시간봉 수집 스킵")
+    parser.add_argument(
+        "--1h-only", action="store_true", dest="h1_only", help="1시간봉만 수집 (일봉·factor 스킵)"
+    )
     parser.add_argument(
         "--cleanup-only",
         action="store_true",
@@ -386,6 +419,17 @@ def main():
     if args.limit:
         tickers = tickers[: args.limit]
         print(f"   → limited to first {len(tickers)}")
+
+    # 1시간봉만 수집 모드 — 일봉·factor 전부 스킵
+    if args.h1_only:
+        us_tickers = [t for t in tickers if not is_krx_symbol(t)]
+        if us_tickers:
+            print(f"\n🕐 1h-only mode: {len(us_tickers)} US symbols")
+            _ingest_1h(us_tickers)
+        else:
+            print("⚠️ 미국 종목 없음 — 1h 수집 대상 없음")
+        print(f"\n🎉 All done in {time.time() - start_ts:.0f}s")
+        return
 
     # 2a. Cleanup: 유니버스 밖 symbol 제거
     if args.cleanup_only or args.cleanup_before:
@@ -500,6 +544,13 @@ def main():
     print(
         f"✅ Factors done: {fac_ok} ok, {fac_fail} fail, {skipped} skipped, {time.time() - fac_start:.0f}s"
     )
+
+    # 5. 1시간봉 수집 (미국 종목만 — KRX는 yfinance 1h 미지원)
+    if args.skip_1h:
+        print("\n⏭ Skipping 1h candle ingestion")
+    elif us_tickers:
+        print(f"\n🕐 Ingesting 1h candles for {len(us_tickers)} US symbols...")
+        _ingest_1h(us_tickers)
 
     print(f"\n🎉 All done in {time.time() - start_ts:.0f}s")
 
