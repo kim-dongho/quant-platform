@@ -33,6 +33,7 @@ FACTOR_COLUMNS = [
     "price_vs_sma50",
     "price_vs_sma200",
     "sma20_vs_sma50",
+    "sma50_vs_sma200",
 ]
 
 
@@ -42,9 +43,11 @@ def get_factor_max_times(symbols: List[str]) -> Dict[str, object]:
         return {}
     wanted = set(symbols)
     with engine.connect() as conn:
-        rows = conn.execute(
-            text("SELECT symbol, MAX(time) AS t FROM factors GROUP BY symbol")
-        ).mappings().all()
+        rows = (
+            conn.execute(text("SELECT symbol, MAX(time) AS t FROM factors GROUP BY symbol"))
+            .mappings()
+            .all()
+        )
     return {r["symbol"]: r["t"] for r in rows if r["symbol"] in wanted and r["t"] is not None}
 
 
@@ -54,10 +57,13 @@ def get_market_max_times(symbols: List[str]) -> Dict[str, object]:
         return {}
     wanted = set(symbols)
     with engine.connect() as conn:
-        rows = conn.execute(
-            text("SELECT symbol, MAX(time) AS t FROM market_data GROUP BY symbol")
-        ).mappings().all()
+        rows = (
+            conn.execute(text("SELECT symbol, MAX(time) AS t FROM market_data GROUP BY symbol"))
+            .mappings()
+            .all()
+        )
     return {r["symbol"]: r["t"] for r in rows if r["symbol"] in wanted and r["t"] is not None}
+
 
 # 가장 긴 lookback 지표(SMA200)가 정확히 계산되려면 최소 200봉 + 여유가 필요.
 # 캘린더 300일 ≈ 210 trading days로 SMA200 가드 통과.
@@ -115,6 +121,7 @@ def _compute_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df["price_vs_sma50"] = df["close"] / df["sma_50"] - 1
     df["price_vs_sma200"] = df["close"] / df["sma_200"] - 1
     df["sma20_vs_sma50"] = df["sma_20"] / df["sma_50"] - 1
+    df["sma50_vs_sma200"] = df["sma_50"] / df["sma_200"] - 1
     return df
 
 
