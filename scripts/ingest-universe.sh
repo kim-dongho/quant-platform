@@ -35,4 +35,4 @@ echo "   로그: $LOG_FILE"
 echo "   중단: Ctrl+C (컨테이너 내부 프로세스는 계속 돕니다 — 완전 중단은 docker-compose restart engine)"
 echo ""
 
-docker-compose exec -T engine python -u -m src.scripts.ingest_bulk "$@" 2>&1 | tee "$LOG_FILE"
+docker-compose exec -T engine python -u -m src.scripts.ingest_bulk --skip-1h "$@" 2>&1 | tee "$LOG_FILE"
