@@ -65,9 +65,9 @@ def get_market_max_times(symbols: List[str]) -> Dict[str, object]:
     return {r["symbol"]: r["t"] for r in rows if r["symbol"] in wanted and r["t"] is not None}
 
 
-# 가장 긴 lookback 지표(SMA200)가 정확히 계산되려면 최소 200봉 + 여유가 필요.
-# 캘린더 300일 ≈ 210 trading days로 SMA200 가드 통과.
-_LOOKBACK_DAYS = 300
+# 가장 긴 lookback 지표(SMA200)가 정확히 계산되려면 최소 200 거래일이 필요.
+# 캘린더 400일 ≈ 280 trading days로 SMA200 + 공휴일 많은 KRX도 안전하게 커버.
+_LOOKBACK_DAYS = 400
 
 
 def _load_ohlcv(symbol: str, since=None) -> pd.DataFrame:
