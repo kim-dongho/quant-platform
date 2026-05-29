@@ -45,6 +45,41 @@ WATCHLIST: List[str] = [
     "MSFT",
     "GOOGL",
     "META",
+    # 2x 레버리지 ETF (Long) — 중복 시 유동성 큰 것 1개만
+    "TSLL",  # TSLA 2x (Direxion)
+    "NVDL",  # NVDA 2x (GraniteShares)
+    "AAPU",  # AAPL 2x (Direxion)
+    "MSFU",  # MSFT 2x (Direxion)
+    "GGLL",  # GOOGL 2x (Direxion)
+    "METU",  # META 2x (Direxion)
+    "AMDU",  # AMD 2x (Direxion)
+    "AMZU",  # AMZN 2x (Direxion)
+    "PTIR",  # PLTR 2x (Direxion)
+    "CONL",  # COIN 2x (Direxion)
+    "MSTX",  # MSTR 2x (Defiance)
+    "AVGX",  # AVGO 2x (Defiance)
+    "SMCX",  # SMCI 2x (Defiance)
+    "RGTX",  # RGTI 2x (Defiance)
+    "IONX",  # IONQ 2x (Defiance)
+    "RKLX",  # RKLB 2x (Defiance)
+    "HODU",  # HOOD 2x (Direxion)
+    "IRE",  # IREN 2x (Defiance)
+    "MUU",  # MU 2x (Direxion)
+    "NFLU",  # NFLX 2x (T-Rex)
+    "SHPU",  # SHOP 2x (Direxion)
+    "ADBU",  # ADBE 2x (Direxion)
+    "PYPU",  # PYPL 2x (Direxion)
+    "TXNU",  # TXN 2x (Direxion)
+    "UNHU",  # UNH 2x (Direxion)
+    "ASMU",  # ASML 2x (Direxion)
+    "BABU",  # BABA 2x (Direxion)
+    "MRVU",  # MRVL 2x (Direxion)
+    "BRKU",  # BRK-B 2x (Direxion)
+    "CSCL",  # CSCO 2x (Direxion)
+    "ELIL",  # LLY 2x (Direxion)
+    "LINT",  # INTC 2x (Direxion)
+    "LMTL",  # LMT 2x (Direxion)
+    "TTDU",  # TTD 2x (T-Rex)
 ]
 
 # 기존 코드 호환성용 alias
