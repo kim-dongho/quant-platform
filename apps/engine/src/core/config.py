@@ -338,7 +338,13 @@ def get_all_ingest_universe() -> List[str]:
     미국: Russell 1000 ∪ Russell 2000 ∪ NASDAQ 100 ∪ SPY (R3000 커버 + ADR 보충 + 벤치마크)
     국내: KRX 350 (KOSPI 200 + KOSDAQ 150)
     """
-    us = set(fetch_russell1000()) | set(fetch_russell2000()) | set(fetch_nasdaq100()) | {"SPY"}
+    us = (
+        set(fetch_russell1000())
+        | set(fetch_russell2000())
+        | set(fetch_nasdaq100())
+        | set(WATCHLIST)
+        | {"SPY"}
+    )
     kr = set(fetch_krx350())
     return sorted(us | kr)
 
