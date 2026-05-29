@@ -17,7 +17,8 @@ WATCHLIST: List[str] = [
     "SPCE",
     "JOBY",
     "ACHR",
-    # AI/양자
+    # AI/양자/광학
+    "LPTH",
     "PLTR",
     "IONQ",
     "QUBT",
