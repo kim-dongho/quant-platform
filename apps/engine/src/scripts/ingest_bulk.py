@@ -517,59 +517,57 @@ def main():
     # 4. Factor precompute
     if args.skip_factors:
         print("\n⏭ Skipping factor computation")
-        return
+    else:
+        print(f"\n📊 Computing factors for {len(tickers)} symbols...")
+        fac_start = time.time()
 
-    print(f"\n📊 Computing factors for {len(tickers)} symbols...")
-    fac_start = time.time()
+        # Bulk MAX(time) 조회 — factors / market_data 각각 한 번의 GROUP BY 쿼리로.
+        # market_data 최신 ≤ factors 최신인 심볼은 이미 계산 완료 → 스킵.
+        factor_max = get_factor_max_times(tickers)
+        market_max = get_market_max_times(tickers)
 
-    # Bulk MAX(time) 조회 — factors / market_data 각각 한 번의 GROUP BY 쿼리로.
-    # market_data 최신 ≤ factors 최신인 심볼은 이미 계산 완료 → 스킵.
-    factor_max = get_factor_max_times(tickers)
-    market_max = get_market_max_times(tickers)
+        todo = []
+        skipped = 0
+        for sym in tickers:
+            fmax = factor_max.get(sym)
+            mmax = market_max.get(sym)
+            if mmax is None:
+                skipped += 1
+                continue
+            if fmax is not None and fmax >= mmax:
+                skipped += 1
+                continue
+            todo.append(sym)
 
-    todo = []
-    skipped = 0
-    for sym in tickers:
-        fmax = factor_max.get(sym)
-        mmax = market_max.get(sym)
-        if mmax is None:
-            # market_data 자체가 없으면 계산 불가
-            skipped += 1
-            continue
-        if fmax is not None and fmax >= mmax:
-            skipped += 1
-            continue
-        todo.append(sym)
+        print(f"   → {skipped} already up-to-date, {len(todo)} to compute")
 
-    print(f"   → {skipped} already up-to-date, {len(todo)} to compute")
-
-    if not todo:
-        print(f"✅ Factors done: 0 ok, 0 fail, {skipped} skipped, {time.time() - fac_start:.0f}s")
-        print(f"\n🎉 All done in {time.time() - start_ts:.0f}s")
-        return
-
-    fac_ok = 0
-    fac_fail = 0
-    total = len(todo)
-    progress_every = 50
-    for i, sym in enumerate(todo):
-        try:
-            n = compute_factors_for_symbol(sym, last_time=factor_max.get(sym))
-            if n > 0:
-                fac_ok += 1
-        except Exception as e:
-            fac_fail += 1
-            print(f"  ⚠️ factor {sym}: {e}")
-        if (i + 1) % progress_every == 0 or (i + 1) == total:
-            elapsed = time.time() - fac_start
-            pct = (i + 1) / total * 100
-            eta = (elapsed / (i + 1)) * (total - i - 1) if i + 1 < total else 0
+        if todo:
+            fac_ok = 0
+            fac_fail = 0
+            total = len(todo)
+            progress_every = 50
+            for i, sym in enumerate(todo):
+                try:
+                    n = compute_factors_for_symbol(sym, last_time=factor_max.get(sym))
+                    if n > 0:
+                        fac_ok += 1
+                except Exception as e:
+                    fac_fail += 1
+                    print(f"  ⚠️ factor {sym}: {e}")
+                if (i + 1) % progress_every == 0 or (i + 1) == total:
+                    elapsed = time.time() - fac_start
+                    pct = (i + 1) / total * 100
+                    eta = (elapsed / (i + 1)) * (total - i - 1) if i + 1 < total else 0
+                    print(
+                        f"  [{i + 1}/{total}] {pct:.1f}% · last: {sym} · {elapsed:.0f}s · ETA {eta / 60:.1f}min"
+                    )
             print(
-                f"  [{i + 1}/{total}] {pct:.1f}% · last: {sym} · {elapsed:.0f}s · ETA {eta / 60:.1f}min"
+                f"✅ Factors done: {fac_ok} ok, {fac_fail} fail, {skipped} skipped, {time.time() - fac_start:.0f}s"
             )
-    print(
-        f"✅ Factors done: {fac_ok} ok, {fac_fail} fail, {skipped} skipped, {time.time() - fac_start:.0f}s"
-    )
+        else:
+            print(
+                f"✅ Factors done: 0 ok, 0 fail, {skipped} skipped, {time.time() - fac_start:.0f}s"
+            )
 
     # 5. 펀더멘털 — SEC EDGAR(미국) + fundamental_factors 계산(전체)
     if args.skip_fundamental:
