@@ -324,6 +324,31 @@ def process_batch(
 
 
 # ---------------------------------------------------------------------------
+# 펀더멘털 수집 + factor 계산
+# ---------------------------------------------------------------------------
+def _compute_fundamentals(us_tickers: List[str], kr_tickers: List[str], first_start: str) -> None:
+    """SEC EDGAR(미국) 펀더멘털 수집 + fundamental_factors 계산(미국+한국)."""
+    from datetime import date
+
+    from src.service.fundamental.edgar_client import ingest_us_fundamentals
+    from src.service.fundamental.factors import backfill as backfill_factors
+
+    # 5-1. 미국: SEC EDGAR 재무제표 수집
+    if us_tickers:
+        print(f"\n📊 SEC EDGAR 펀더멘털 수집: {len(us_tickers)} US symbols...")
+        ingest_us_fundamentals(us_tickers)
+
+    # 5-2. 전체: fundamental_factors 계산 (fundamental_data + market_data → PBR/PER/ROE 등)
+    all_tickers = us_tickers + kr_tickers
+    if all_tickers:
+        end = date.today().isoformat()
+        print(
+            f"\n🧮 fundamental_factors 계산: {len(all_tickers)} symbols ({first_start} ~ {end})..."
+        )
+        backfill_factors(all_tickers, first_start, end)
+
+
+# ---------------------------------------------------------------------------
 # 1시간봉 수집
 # ---------------------------------------------------------------------------
 def _ingest_1h(us_tickers: List[str], batch_size: int = 50) -> None:
@@ -378,6 +403,7 @@ def main():
     )
     parser.add_argument("--skip-factors", action="store_true", help="factor precompute 스킵")
     parser.add_argument("--skip-1h", action="store_true", help="1시간봉 수집 스킵")
+    parser.add_argument("--skip-fundamental", action="store_true", help="펀더멘털 factor 계산 스킵")
     parser.add_argument(
         "--1h-only", action="store_true", dest="h1_only", help="1시간봉만 수집 (일봉·factor 스킵)"
     )
@@ -545,7 +571,13 @@ def main():
         f"✅ Factors done: {fac_ok} ok, {fac_fail} fail, {skipped} skipped, {time.time() - fac_start:.0f}s"
     )
 
-    # 5. 1시간봉 수집 (미국 종목만 — KRX는 yfinance 1h 미지원)
+    # 5. 펀더멘털 — SEC EDGAR(미국) + fundamental_factors 계산(전체)
+    if args.skip_fundamental:
+        print("\n⏭ Skipping fundamental factors")
+    else:
+        _compute_fundamentals(us_tickers, kr_tickers, first_start)
+
+    # 6. 1시간봉 수집 (미국 종목만 — KRX는 yfinance 1h 미지원)
     if args.skip_1h:
         print("\n⏭ Skipping 1h candle ingestion")
     elif us_tickers:
