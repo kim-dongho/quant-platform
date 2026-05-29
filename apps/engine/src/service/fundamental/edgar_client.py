@@ -212,7 +212,15 @@ def save_edgar_to_db(df: pd.DataFrame) -> int:
     if df.empty:
         return 0
 
+    import math
+
     rows = df.where(df.notna(), None).to_dict(orient="records")
+    for r in rows:
+        # nan/inf → None
+        for k, v in r.items():
+            if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
+                r[k] = None
+
     with db_engine.begin() as conn:
         for r in rows:
             # stocks 행 보장 (FK 충족)

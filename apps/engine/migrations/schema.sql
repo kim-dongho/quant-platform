@@ -153,13 +153,15 @@ CREATE TABLE IF NOT EXISTS fundamental_data (
     total_assets      BIGINT,                       -- 자산총계
     total_equity      BIGINT,                       -- 자본총계
     total_liabilities BIGINT,                       -- 부채총계
-    eps_basic         BIGINT,                       -- 보통주 기본 주당이익 (원)
+    eps_basic         DOUBLE PRECISION,              -- 보통주 기본 주당이익 (KRX: 원, US: 달러)
     ingested_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (symbol, fiscal_quarter)
 );
 
 -- 기존 환경 호환 — 누락 컬럼 자동 보강.
-ALTER TABLE fundamental_data ADD COLUMN IF NOT EXISTS eps_basic BIGINT;
+ALTER TABLE fundamental_data ADD COLUMN IF NOT EXISTS eps_basic DOUBLE PRECISION;
+-- BIGINT → DOUBLE PRECISION 마이그레이션 (SEC EDGAR EPS는 소수점 포함)
+ALTER TABLE fundamental_data ALTER COLUMN eps_basic TYPE DOUBLE PRECISION;
 
 CREATE INDEX IF NOT EXISTS ix_fundamental_quarter ON fundamental_data (fiscal_quarter DESC);
 
