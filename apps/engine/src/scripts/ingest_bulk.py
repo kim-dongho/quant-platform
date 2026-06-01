@@ -242,8 +242,8 @@ def process_krx_batch(
     for sym in batch:
         last = last_dates.get(sym)
         start = (last + timedelta(days=1)).date().isoformat() if last else first_start
-        # 이미 최신이면 호출 자체 생략
-        if last and last.date() >= today.date():
+        # 미래 데이터가 있으면 스킵 (당일은 종가 갱신 위해 항상 재수집)
+        if last and last.date() > today.date():
             succeeded += 1
             continue
         df = _fetch_krx_single(sym, start)
@@ -304,8 +304,8 @@ def process_batch(
     if incremental:
         earliest_last = min(last_dates[s] for s in incremental)
         start_dt = (earliest_last + timedelta(days=1)).date()
-        if start_dt >= today.date():
-            # 이미 최신 — 오늘 종가도 없으면 건너뜀
+        if start_dt > today.date():
+            # 미래 — 스킵 (당일은 종가 갱신 위해 재수집)
             succeeded += len(incremental)
             return succeeded, failed
         start = start_dt.isoformat()
