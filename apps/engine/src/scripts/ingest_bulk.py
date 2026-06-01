@@ -405,6 +405,12 @@ def main():
     parser.add_argument("--skip-1h", action="store_true", help="1시간봉 수집 스킵")
     parser.add_argument("--skip-fundamental", action="store_true", help="펀더멘털 factor 계산 스킵")
     parser.add_argument(
+        "--fundamental-only",
+        action="store_true",
+        dest="fundamental_only",
+        help="펀더멘털만 수집/계산 (분기별 실행용)",
+    )
+    parser.add_argument(
         "--1h-only", action="store_true", dest="h1_only", help="1시간봉만 수집 (일봉·factor 스킵)"
     )
     parser.add_argument(
@@ -569,11 +575,12 @@ def main():
                 f"✅ Factors done: 0 ok, 0 fail, {skipped} skipped, {time.time() - fac_start:.0f}s"
             )
 
-    # 5. 펀더멘털 — SEC EDGAR(미국) + fundamental_factors 계산(전체)
-    if args.skip_fundamental:
-        print("\n⏭ Skipping fundamental factors")
-    else:
+    # 5. 펀더멘털 — 분기별 별도 cron 권장 (매일 돌리면 10년치 JOIN으로 수시간 소요)
+    #    수동 실행: python -u -m src.scripts.ingest_bulk --fundamental-only
+    if args.fundamental_only:
         _compute_fundamentals(us_tickers, kr_tickers, first_start)
+    elif not args.skip_fundamental:
+        print("\n⏭ Fundamental: 분기별 별도 실행 권장 (--fundamental-only)")
 
     # 6. 1시간봉 수집 (미국 종목만 — KRX는 yfinance 1h 미지원)
     if args.skip_1h:
