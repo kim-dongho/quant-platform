@@ -160,7 +160,17 @@ def upsert_market_data(ticker: str, df: pd.DataFrame) -> int:
 
     ensure_stock_row(ticker)
     table = Table("market_data", metadata, autoload_with=engine)
-    stmt = insert(table).values(rows).on_conflict_do_nothing(index_elements=["time", "symbol"])
+    stmt = insert(table).values(rows)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["time", "symbol"],
+        set_={
+            "open": stmt.excluded.open,
+            "high": stmt.excluded.high,
+            "low": stmt.excluded.low,
+            "close": stmt.excluded.close,
+            "volume": stmt.excluded.volume,
+        },
+    )
 
     try:
         with engine.begin() as conn:
