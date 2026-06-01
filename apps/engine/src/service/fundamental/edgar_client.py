@@ -214,8 +214,24 @@ def save_edgar_to_db(df: pd.DataFrame) -> int:
 
     import math
 
+    # SQL에 필요한 모든 컬럼이 dict에 있어야 함 — 누락 시 None으로 채움
+    required_cols = [
+        "symbol",
+        "fiscal_quarter",
+        "revenue",
+        "operating_income",
+        "net_income",
+        "total_assets",
+        "total_equity",
+        "total_liabilities",
+        "eps_basic",
+    ]
     rows = df.where(df.notna(), None).to_dict(orient="records")
     for r in rows:
+        # 누락 컬럼 None 보충
+        for col in required_cols:
+            if col not in r:
+                r[col] = None
         # nan/inf → None
         for k, v in r.items():
             if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
