@@ -153,12 +153,12 @@ def compute_fundamental_factors(symbols: List[str], start: str, end: str) -> pd.
         direction="backward",
     )
 
-    # 발행주식수 추정 — TTM_net_income / TTM_eps. eps 양수만 유효.
-    pos_eps = merged["ttm_eps_basic"] > 0
+    # 발행주식수 추정 — TTM_net_income / TTM_eps. eps=0만 제외 (적자도 유효).
+    nonzero_eps = merged["ttm_eps_basic"] != 0
     shares = pd.Series(np.nan, index=merged.index)
-    shares.loc[pos_eps] = (
-        merged.loc[pos_eps, "ttm_net_income"] / merged.loc[pos_eps, "ttm_eps_basic"]
-    )
+    shares.loc[nonzero_eps] = (
+        merged.loc[nonzero_eps, "ttm_net_income"] / merged.loc[nonzero_eps, "ttm_eps_basic"]
+    ).abs()  # 적자 시 shares가 음수되는 것 방지
     market_cap = merged["close"] * shares
 
     # 자본총계 ≤ 0 (자본잠식) 은 PBR/ROE 무의미 → NaN
